@@ -1,5 +1,72 @@
 # HiSKIO AI 客服對話系統 — 雛形規格書 v6（主管模式）
 
+## v6.1 修正紀錄（2026-05-04 部署 Railway 後發現）
+
+### 修正 1：移除 evaluator 後台靜默推進建單
+
+**Bug**：用戶情緒抒發（例「我心情很差，我想退費」）後，evaluator 的 Haiku 把
+`user_explicitly_wants_ticket` 判為 true → orchestrator 自動設定
+`ticket_state.user_decision = "accepted"` + `ticket_suggested = True`，
+**rag 藍框訊息底下無端冒出「建立工單」按鈕**。
+
+**修法**：
+- `core/orchestrator._finalize_turn` 移除「evaluator 偵測到 user_decision=accepted 就靜默推進建單」那段
+- `nodes/evaluator.py` 不再寫 `state.ticket_state.user_decision = "accepted"`
+
+**為什麼**：v3 時代 evaluator 是唯一能偵測「用戶想建單」的地方，所以靠它後台推進。
+v6 主管模式下，主管自己會在下一輪看 chat_history 判斷並選 `suggest_ticket` action，
+不再需要 evaluator 走後門。Evaluator 改回單純「填知識性欄位」（情緒/分類/解決確認）。
+
+### 修正 2：llm_client 自動 strip 環境變數前後空白
+
+**Bug**：Railway Variables 設定 `MODEL_SONNET` 時若不小心開頭打了空白
+（例：`" claude-sonnet-4-5"`），Anthropic API 收到含空白的 model name 會回 404 not_found_error。
+debug 過程花很久才發現，因為 `*****` 顯示看不出空白。
+
+**修法**：
+- `core/llm_client._model` 自動 `.strip()` env var
+- `core/llm_client._get_client` 也順手 strip `ANTHROPIC_API_KEY`
+
+### Railway 部署相關
+
+新增 `railway.json` 控制 startCommand：
+```json
+{
+  "deploy": {
+    "startCommand": "python scripts/build_kb_index.py && python -m uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"
+  }
+}
+```
+
+部署需要：
+- Variables：`ANTHROPIC_API_KEY`、`MODEL_SONNET`、`MODEL_HAIKU`、`DB_PATH=/data/prototype.db` 等
+- Volume：掛 `/data` 持久化 SQLite（不掛每次部署資料消失）
+- Public Domain：Settings → Networking → Generate Domain
+
+### Git 版本管理
+
+- repo：https://github.com/adamlin1024/hiskio-cs-prototype（private）
+- `main` 分支 + `v6-manager-mode` tag = 主管模式（當前）
+- `v5-pipeline` 分支 + `v5-pipeline-mode` tag = 還原點（分類器流水線）
+
+切換指令：
+```bash
+git checkout v5-pipeline-mode    # 還原 v5
+git checkout main                # 切回 v6
+```
+
+### 已知特性（不是 bug）
+
+- **連續 3 次模糊（manager clarify 或 acknowledge_uncertainty）→ 強制建單**
+  即使用戶有在往具體方向走（「我想要看看成問題」→「課程問題」），
+  系統仍可能因為連續判斷不出具體議題而觸發 force_escalation。
+  常數：`MAX_UNCLEAR_BEFORE_FORCE_TICKET = 3`，可調整。
+- **主管 Sonnet 在邊界 case 會被 chat_history 影響判斷**
+  混合 in_scope + out_of_scope 多意圖（例「退費 + 水果」）容易判 clarify。
+  之後可在 manager prompt 加強「混合意圖優先處理 in_scope 那個」規則。
+
+---
+
 ## 文件版本說明
 
 v6 取代 v5。最大變動：**架構從「分類器流水線」改為「主管統一決策」**。
