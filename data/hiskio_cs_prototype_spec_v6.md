@@ -1,5 +1,77 @@
 # HiSKIO AI 客服對話系統 — 雛形規格書 v6（主管模式）
 
+## v6.2 Token 成本優化（2026-05-04 加入 Anthropic Prompt Caching）
+
+### 改動目的
+
+降低每輪對話成本。改動前每 10 輪對話約 $0.169 美金（NT$5.41），加 cache 後降到 $0.098 美金（NT$3.15）。**省 42%、零行為差異**。
+
+### 改動內容
+
+1. **`core/llm_client.py`** 新增 `cache_system` 參數
+   - 字串 system + `cache_system=True` 自動包成 Anthropic 結構化 cache block
+   - `call_sonnet` 與 `call_haiku` 都支援
+   - 加 token 統計（`_usage_log` + `reset_usage()` + `get_usage_summary()`）
+
+2. **`nodes/manager.py`** prompt 拆兩段
+   - `prompts/manager_system.txt`：靜態（規則 + FAQ list + KB 索引），可被 cache（每輪寫快取或讀快取）
+   - `prompts/manager_user.txt`：動態（用戶訊息 + chat_history + intent_log + 系統狀態）
+   - 舊的 `prompts/manager.txt` 已刪除
+
+3. **`nodes/cs_response.py`** prompt 拆兩段（同樣模式）
+   - `prompts/cs_response_system.txt`：靜態（角色 + 任務 + SUGGEST_TICKET 規則）
+   - `prompts/cs_response_user.txt`：動態（用戶狀態 + KB 文章 + 對話歷史）
+
+4. **`app.py`** 加 admin endpoint
+   - `GET /api/admin/usage`：取目前 session 的 token 統計
+   - `POST /api/admin/usage/reset`：重置統計
+
+5. **新增 benchmark 工具**
+   - `scripts/benchmark_tokens.py`：固定 10 輪情境的成本 benchmark
+   - `data/benchmark_baseline_v6.md`：baseline 數據紀錄
+   - `data/benchmark_comparison.md`：四版本對比
+
+### Cache 行為
+
+Anthropic Prompt Caching 規則：
+- 寫快取：input_token 計費 ×1.25
+- 讀快取（5 分鐘 TTL 內）：input_token 計費 ×0.10（省 90%）
+- 最低 cache 門檻：1024 tokens（manager 約 1700 tokens 滿足、cs_response 約 1000 tokens 邊緣）
+
+### Benchmark 結果（10 輪固定情境）
+
+| 版本 | 總成本 | 相對 baseline |
+|---|---|---|
+| Baseline（Sonnet 無 cache）| $0.169 | — |
+| + manager cache | $0.119 | -30% |
+| **+ manager cache + cs_response cache（當前）** | **$0.098** | **-42%** |
+| Haiku 主管 + cache（測試用，未採用）| $0.066 | -61%，但行為品質掉 |
+
+### 切換主管模型供 A/B 測
+
+`nodes/manager.py` 加 env var `MANAGER_MODEL`：
+- `sonnet`（預設）→ 用 Sonnet 4.6
+- `haiku` → 切換 Haiku 4.5
+
+便於之後比較不同模型的行為品質與成本。
+
+### 開 / 關 cache 的方式
+
+`nodes/manager.py` 跟 `nodes/cs_response.py` 呼叫 `call_sonnet(...)` 時的 `cache_system=True` 參數。
+改成 `False` 即關閉 cache（成本回升到 baseline）。
+
+### 之後可繼續優化的方向（依 ROI 排）
+
+| 優先 | 改動 | 工作量 | 預估省 token | 風險 |
+|---|---|---|---|---|
+| 1 | 兩段式主管：Haiku 粗判 + Sonnet 細判 | 半天 | -20% | 中（邊界判斷可能掉品質） |
+| 2 | 換 Gemini 2.5 Pro 跑 cs_response | 3-4 天 | -20% | 大（多 provider 維護成本） |
+| 3 | 換 OpenAI / Gemini 系列做整體成本對比 | 1-2 天 | varies | 大（要重校所有 prompt） |
+
+雛形階段不建議做。等對話量穩定 > 1 萬輪/月再評估。
+
+---
+
 ## v6.1 修正紀錄（2026-05-04 部署 Railway 後發現）
 
 ### 修正 1：移除 evaluator 後台靜默推進建單
