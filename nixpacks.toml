@@ -1,8 +1,0 @@
-[phases.setup]
-nixPkgs = ["python312"]
-
-[phases.install]
-cmds = ["python -m pip install --upgrade pip", "python -m pip install -r requirements.txt"]
-
-[start]
-cmd = "python scripts/build_kb_index.py && python -m uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"
