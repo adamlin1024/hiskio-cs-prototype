@@ -1,0 +1,19 @@
+# 用戶當下狀態
+- 是否登入：{is_logged_in}
+- 是否舊客戶：{is_returning_customer}
+- 已購課程：{purchase_summary}
+- 用戶情緒：{user_emotion}
+- 對話進行到第 {turn_count} 輪
+
+# 當前問題分類
+{category} / {sub_category}
+摘要：{summary}
+
+# 可用的 KB 文章
+{kb_articles_full_content}
+
+# 對話歷史
+{chat_history_recent}
+
+# 用戶最新訊息
+「{user_message}」

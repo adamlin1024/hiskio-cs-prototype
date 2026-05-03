@@ -104,6 +104,21 @@ class TicketReq(BaseModel):
     session_id: str
 
 
+@app.get("/api/admin/usage")
+def get_usage():
+    """v6.2 token 統計（自上次 reset 以來）。"""
+    from core import llm_client
+    return llm_client.get_usage_summary()
+
+
+@app.post("/api/admin/usage/reset")
+def reset_usage():
+    """重置 token 統計。"""
+    from core import llm_client
+    llm_client.reset_usage()
+    return {"reset": True}
+
+
 @app.post("/api/ticket/create")
 def create_ticket(req: TicketReq):
     """前端「建立工單」按鈕觸發，跳過「好/不用」直接走收 email / 建單流程。"""

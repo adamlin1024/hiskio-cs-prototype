@@ -12,7 +12,8 @@ from core.text_utils import format_recent_history
 
 logger = logging.getLogger(__name__)
 
-_PROMPT = load_prompt("cs_response")
+_SYSTEM_TPL = load_prompt("cs_response_system")
+_USER_TPL = load_prompt("cs_response_user")
 
 
 def _format_purchase_summary(purchase_history: list[str]) -> str:
@@ -39,7 +40,11 @@ def respond(state: dict, kb_articles: list[dict], user_message: str) -> str:
     user = state["user_info"]
     issue = state["issue_context"]
 
-    prompt = _PROMPT.format(
+    # static 部分（角色、任務、規則）→ 可被 prompt cache 命中
+    system_prompt = _SYSTEM_TPL  # 純靜態，無 placeholder
+
+    # dynamic 部分（用戶狀態、KB 文章、歷史、訊息）每輪都不同
+    user_prompt = _USER_TPL.format(
         is_logged_in="是" if user["is_logged_in"] else "否",
         is_returning_customer="是" if user.get("purchase_history") else "否",
         purchase_summary=_format_purchase_summary(user.get("purchase_history", [])),
@@ -54,4 +59,11 @@ def respond(state: dict, kb_articles: list[dict], user_message: str) -> str:
     )
 
     fallback = "抱歉，目前系統有點忙不過來，請稍後再試或考慮建立工單由客服跟進。"
-    return call_sonnet(prompt, max_tokens=600, temperature=0.6, fallback=fallback)
+    return call_sonnet(
+        user_prompt,
+        max_tokens=600,
+        temperature=0.6,
+        system=system_prompt,
+        cache_system=True,
+        fallback=fallback,
+    )

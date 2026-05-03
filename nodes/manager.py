@@ -18,12 +18,13 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from core.llm_client import call_sonnet, load_prompt
+from core.llm_client import call_haiku, call_sonnet, load_prompt
 from core.text_utils import extract_json_object, format_recent_history
 
 logger = logging.getLogger(__name__)
 
-_PROMPT = load_prompt("manager")
+_SYSTEM_TPL = load_prompt("manager_system")
+_USER_TPL = load_prompt("manager_user")
 
 _VALID_ACTIONS = {
     "greeting",
@@ -98,7 +99,14 @@ def decide(state: dict, user_message: str) -> dict:
     user = state["user_info"]
     sl = state["service_limits"]
 
-    prompt = _PROMPT.format(
+    # static 部分（每次都一樣，可被 prompt cache 命中）
+    system_prompt = _SYSTEM_TPL.format(
+        faq_list=_load_faq_summary(),
+        kb_index_list=_load_kb_summary(),
+    )
+
+    # dynamic 部分（每輪變動）
+    user_prompt = _USER_TPL.format(
         user_message=user_message,
         full_history=format_recent_history(state["chat_history"], turns=10, empty="（首次對話）"),
         intent_log_str=_format_intent_log(state["intent_state"].get("intent_log") or []),
@@ -112,11 +120,18 @@ def decide(state: dict, user_message: str) -> dict:
         unresolved_count=sl["unresolved_count"],
         ticket_suggested=state["ticket_state"]["ticket_suggested"],
         user_declined_ticket=(state["ticket_state"]["user_decision"] == "declined"),
-        faq_list=_load_faq_summary(),
-        kb_index_list=_load_kb_summary(),
     )
 
-    raw = call_sonnet(prompt, max_tokens=600, temperature=0.0, fallback="")
+    # 可由 env var MANAGER_MODEL 切換 sonnet（預設）/ haiku，方便 benchmark 比對
+    caller = call_haiku if os.getenv("MANAGER_MODEL", "sonnet").lower() == "haiku" else call_sonnet
+    raw = caller(
+        user_prompt,
+        max_tokens=600,
+        temperature=0.0,
+        system=system_prompt,
+        cache_system=True,
+        fallback="",
+    )
     parsed = extract_json_object(raw)
 
     fallback = {

@@ -1,0 +1,21 @@
+# 用戶最新這一句
+「{user_message}」
+
+# 完整對話歷史
+{full_history}
+
+# 當前 intent_log（這個 session 累計偵測到的所有意圖）
+{intent_log_str}
+
+# 用戶身分
+- 是否登入：{is_logged_in}
+- 用戶名稱：{user_name}
+- 是否舊客戶：{is_returning_customer}
+
+# 系統當前狀態
+- phase：{phase}
+- 累計離題次數：{off_topic_count} / {max_off_topic_count}
+- 累計低信心次數：{low_confidence_count}
+- 累計未解決次數：{unresolved_count}
+- 工單建議過：{ticket_suggested}
+- 用戶曾拒絕建單：{user_declined_ticket}
