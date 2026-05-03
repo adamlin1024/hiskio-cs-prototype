@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HiSKIO 工單後台</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #fff;
+    --border: #e3e5ea;
+    --muted: #6b7280;
+    --primary: #2563eb;
+    --open: #2563eb;
+    --in-progress: #d97706;
+    --closed: #6b7280;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    min-height: 100vh;
+  }
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  header a {
+    color: var(--primary);
+    text-decoration: none;
+    font-size: 14px;
+  }
+  main {
+    max-width: 1100px;
+    margin: 24px auto;
+    padding: 0 24px;
+  }
+  .filters {
+    margin-bottom: 16px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .filters span { color: var(--muted); font-size: 13px; }
+  .filters button {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .filters button.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .ticket {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+  }
+  .ticket .row1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+  .ticket .id {
+    font-weight: bold;
+    font-size: 14px;
+  }
+  .badge {
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #f3f4f6;
+    color: var(--muted);
+  }
+  .badge.cat { background: #e0e7ff; color: #1e40af; }
+  .badge.member { background: #dcfce7; color: #166534; }
+  .badge.guest { background: #fef3c7; color: #92400e; }
+  .status {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 2px 10px;
+    border-radius: 4px;
+  }
+  .status.open { background: #dbeafe; color: var(--open); }
+  .status.in_progress { background: #fed7aa; color: var(--in-progress); }
+  .status.closed { background: #e5e7eb; color: var(--closed); }
+  .ticket .summary {
+    font-size: 14px;
+    color: #374151;
+    margin: 6px 0 10px;
+    line-height: 1.5;
+  }
+  .ticket .meta {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .ticket .actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .ticket .actions button {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 12px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .ticket .actions button.primary {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 40px;
+  }
+  /* modal */
+  #modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #modal.open { display: flex; }
+  #modal .card {
+    background: var(--panel);
+    width: 720px;
+    max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 60px);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #modal .head {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #modal .head h2 { margin: 0; font-size: 15px; }
+  #modal .close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    color: var(--muted);
+    line-height: 1;
+  }
+  #modal .body {
+    padding: 16px 18px;
+    overflow-y: auto;
+    font-size: 13px;
+  }
+  #modal .info {
+    background: #f9fafb;
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-bottom: 14px;
+    font-size: 12px;
+    color: #374151;
+    line-height: 1.6;
+  }
+  #modal .info b { color: #111; }
+  .chat-msg {
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .chat-msg.user {
+    background: #e0e7ff;
+    margin-left: 24px;
+  }
+  .chat-msg.assistant {
+    background: #f3f4f6;
+    margin-right: 24px;
+  }
+  .chat-msg .role {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 3px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>HiSKIO 工單後台</h1>
+  <a href="/">← 返回對話介面</a>
+</header>
+
+<main>
+  <div class="filters">
+    <span>篩選：</span>
+    <button data-status="" class="active">全部</button>
+    <button data-status="open">Open</button>
+    <button data-status="in_progress">In Progress</button>
+    <button data-status="closed">Closed</button>
+  </div>
+
+  <div id="list"><div class="empty">載入中...</div></div>
+</main>
+
+<div id="modal" onclick="if(event.target.id==='modal')closeModal()">
+  <div class="card">
+    <div class="head">
+      <h2 id="modal-title">工單詳情</h2>
+      <button class="close" onclick="closeModal()">×</button>
+    </div>
+    <div class="body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+let currentFilter = "";
+
+const $ = (id) => document.getElementById(id);
+const listEl = $("list");
+
+async function loadTickets() {
+  const url = currentFilter
+    ? `/api/admin/tickets?status=${currentFilter}`
+    : "/api/admin/tickets";
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    renderTickets(data.tickets);
+  } catch (e) {
+    listEl.innerHTML = `<div class="empty">載入失敗：${e.message}</div>`;
+  }
+}
+
+function renderTickets(tickets) {
+  if (!tickets.length) {
+    listEl.innerHTML = '<div class="empty">沒有工單</div>';
+    return;
+  }
+  listEl.innerHTML = "";
+  tickets.forEach((t) => {
+    const div = document.createElement("div");
+    div.className = "ticket";
+    const memberBadge = t.is_member
+      ? `<span class="badge member">會員</span>`
+      : `<span class="badge guest">訪客</span>`;
+    div.innerHTML = `
+      <div class="row1">
+        <span class="id">#${t.ticket_id}</span>
+        <span class="badge cat">${escapeHtml(t.issue_category || "未分類")}</span>
+        ${memberBadge}
+        <span class="badge">${escapeHtml(t.user_email)}</span>
+        <span class="status ${t.status}">${t.status.toUpperCase()}</span>
+      </div>
+      <div class="summary">${escapeHtml(t.issue_summary || "")}</div>
+      <div class="meta">情緒：${escapeHtml(t.user_emotion_at_close || "—")} · 建立於 ${formatTs(t.created_at)}</div>
+      <div class="actions">
+        <button data-action="open" data-id="${t.ticket_id}">標記 Open</button>
+        <button data-action="in_progress" data-id="${t.ticket_id}">標記處理中</button>
+        <button data-action="closed" data-id="${t.ticket_id}">標記結案</button>
+        <button data-action="view" data-id="${t.ticket_id}" class="primary">查看完整對話</button>
+      </div>
+    `;
+    listEl.appendChild(div);
+  });
+
+  listEl.querySelectorAll("button[data-action]").forEach((btn) => {
+    btn.onclick = () => handleAction(btn.dataset.action, btn.dataset.id);
+  });
+}
+
+async function handleAction(action, ticketId) {
+  if (action === "view") {
+    return openModal(ticketId);
+  }
+  try {
+    const r = await fetch(`/api/admin/tickets/${ticketId}/status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: action }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    await loadTickets();
+  } catch (e) {
+    alert("更新失敗：" + e.message);
+  }
+}
+
+async function openModal(ticketId) {
+  const modal = $("modal");
+  const body = $("modal-body");
+  body.innerHTML = '<div class="empty">載入中...</div>';
+  modal.classList.add("open");
+  try {
+    const r = await fetch(`/api/admin/tickets/${ticketId}`);
+    if (!r.ok) throw new Error(await r.text());
+    const t = await r.json();
+    $("modal-title").textContent = `工單 #${t.ticket_id}`;
+    body.innerHTML = `
+      <div class="info">
+        <b>分類：</b>${escapeHtml(t.issue_category || "—")}
+        <b>狀態：</b>${escapeHtml(t.status)}
+        <b>身分：</b>${t.is_member ? `會員 ${escapeHtml(t.user_id || "")}` : "訪客"}<br>
+        <b>Email：</b>${escapeHtml(t.user_email)}<br>
+        <b>摘要：</b>${escapeHtml(t.issue_summary || "")}<br>
+        <b>結束時情緒：</b>${escapeHtml(t.user_emotion_at_close || "—")}<br>
+        <b>AI 嘗試過：</b>${escapeHtml(t.key_attempts || "—")}<br>
+        <b>建立於：</b>${formatTs(t.created_at)}
+      </div>
+      <h3 style="margin-top:0;font-size:13px;color:var(--muted);">完整對話</h3>
+      <div id="chat-history"></div>
+    `;
+    const histEl = $("chat-history") || body.querySelector("#chat-history");
+    t.full_chat_history.forEach((m) => {
+      const d = document.createElement("div");
+      d.className = `chat-msg ${m.role}`;
+      const roleLabel = m.role === "user" ? "用戶" : `AI${m.response_type ? ` (${m.response_type})` : ""}`;
+      d.innerHTML = `<div class="role">${escapeHtml(roleLabel)} · ${formatTs(m.timestamp)}</div>${escapeHtml(m.content)}`;
+      body.querySelector("#chat-history").appendChild(d);
+    });
+  } catch (e) {
+    body.innerHTML = `<div class="empty">載入失敗：${e.message}</div>`;
+  }
+}
+
+function closeModal() {
+  $("modal").classList.remove("open");
+}
+
+document.querySelectorAll(".filters button").forEach((btn) => {
+  btn.onclick = () => {
+    document.querySelectorAll(".filters button").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentFilter = btn.dataset.status || "";
+    loadTickets();
+  };
+});
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+function formatTs(iso) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("zh-TW");
+  } catch {
+    return iso;
+  }
+}
+
+loadTickets();
+</script>
+</body>
+</html>

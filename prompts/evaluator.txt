@@ -1,0 +1,25 @@
+分析這一輪對話，提煉結構化資訊。只回傳合法 JSON，不要其他文字。
+
+# 對話資料
+用戶訊息：「{user_message}」
+AI 回應：「{ai_response}」
+之前的問題分類：{previous_category}
+對話總輪數：{turn_count}
+
+# 輸出格式
+{{
+  "issue_category": "技術問題 | 課程內容 | 帳務退款 | 帳號登入 | 課程操作 | 其他",
+  "issue_sub_category": "更細的分類例如『無法觀看影片』",
+  "issue_summary": "一句話總結",
+  "user_emotion": "中性 | 困惑 | 焦慮 | 不滿 | 憤怒",
+  "user_satisfied_with_answer": true/false/null,
+  "ai_confidence_in_answer": 0.0-1.0,
+  "user_explicitly_wants_ticket": true/false,
+  "user_confirmed_resolution": true/false
+}}
+
+特別注意 user_confirmed_resolution：
+- true：用戶**這一句**明確表達「問題解決了 / OK 了 / 謝謝 / 沒問題了 / 搞定」
+- false：用戶在問新問題、表達不滿、提供補充資訊、或單純沉默
+
+只輸出 JSON。

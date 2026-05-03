@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HiSKIO AI 客服雛形</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #fff;
+    --border: #e3e5ea;
+    --muted: #6b7280;
+    --primary: #2563eb;
+    --faq: #16a34a;
+    --rag: #2563eb;
+    --off-topic: #ea580c;
+    --off-topic-blocked: #9ca3af;
+    --ticket-flow: #7c3aed;
+    --session-ended: #dc2626;
+    --greeting: #38bdf8;
+    --clarification: #eab308;
+    --intent-selection: #4c1d95;
+    --no-kb-match: #ec4899;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    background: var(--bg);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    padding: 12px 20px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header h1 { font-size: 16px; margin: 0; }
+  .badge {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: 12px;
+  }
+  header button {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 60% 40%;
+    overflow: hidden;
+  }
+  #chat-pane {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+  }
+  .msg {
+    margin: 10px 0;
+    padding: 10px 14px;
+    border-radius: 8px;
+    max-width: 80%;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-size: 14px;
+  }
+  .msg.user {
+    background: #e0e7ff;
+    margin-left: auto;
+    border-left: 3px solid var(--primary);
+  }
+  .msg.ai {
+    background: #f9fafb;
+    border-left: 3px solid var(--muted);
+  }
+  .msg.faq { border-left-color: var(--faq); }
+  .msg.rag { border-left-color: var(--rag); }
+  .msg.off_topic { border-left-color: var(--off-topic); }
+  .msg.off_topic_blocked { border-left-color: var(--off-topic-blocked); font-size: 13px; color: var(--muted); }
+  .msg.ticket_flow { border-left-color: var(--ticket-flow); }
+  .msg.force_escalation { border-left-color: var(--ticket-flow); }
+  .msg.session_ended { border-left-color: var(--session-ended); }
+  .msg.greeting {
+    border-left-color: var(--greeting);
+    border-left-style: dashed;
+  }
+  .msg.greeting_blocked {
+    border-left-color: var(--off-topic-blocked);
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .msg.clarification { border-left-color: var(--clarification); }
+  .msg.intent_selection {
+    border-left-color: var(--intent-selection);
+    border-left-width: 4px;
+  }
+  .msg.no_kb_match { border-left-color: var(--no-kb-match); }
+  .msg .meta {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .ticket-btn {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 6px 12px;
+    background: var(--ticket-flow);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  #input-row {
+    border-top: 1px solid var(--border);
+    padding: 12px;
+    display: flex;
+    gap: 8px;
+  }
+  #input-row input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  #input-row button {
+    padding: 10px 18px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  #input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #debug-pane {
+    background: #1e293b;
+    color: #e2e8f0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 16px;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 12px;
+    min-height: 0;
+    min-width: 0;
+  }
+  #debug-pane h3 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  #state-json {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.4;
+  }
+  /* 身分選擇 modal */
+  #identity-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  #identity-modal .card {
+    background: #fff;
+    padding: 24px 28px;
+    border-radius: 10px;
+    min-width: 320px;
+  }
+  #identity-modal h2 { margin: 0 0 16px; font-size: 16px; }
+  #identity-modal .row { display: flex; gap: 10px; margin-top: 12px; }
+  #identity-modal button {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  #identity-modal button.primary {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+  }
+  #identity-modal select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-top: 8px;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+<div id="identity-modal">
+  <div class="card">
+    <h2>HiSKIO AI 客服 — 請選擇身分</h2>
+    <div class="row">
+      <button id="btn-guest">訪客模式</button>
+      <button id="btn-member" class="primary">模擬會員登入</button>
+    </div>
+    <div id="member-picker" style="display:none">
+      <select id="user-select"></select>
+      <div class="row">
+        <button id="btn-confirm-member" class="primary">確認登入</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<header>
+  <div>
+    <h1>HiSKIO AI 客服雛形</h1>
+    <span class="badge" id="user-badge">尚未建立 session</span>
+  </div>
+  <div style="display:flex;gap:8px;">
+    <a href="/admin" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--panel);font-size:13px;text-decoration:none;color:#111;">後台</a>
+    <button onclick="location.reload()">新對話</button>
+  </div>
+</header>
+
+<main>
+  <section id="chat-pane">
+    <div id="messages"></div>
+    <div id="input-row">
+      <input id="msg-input" placeholder="輸入訊息..." disabled />
+      <button id="send-btn" disabled>送出</button>
+    </div>
+  </section>
+  <aside id="debug-pane">
+    <h3>State 除錯</h3>
+    <div id="state-json">（尚未開始）</div>
+  </aside>
+</main>
+
+<script>
+let sessionId = null;
+
+const $ = (id) => document.getElementById(id);
+const messagesEl = $("messages");
+const inputEl = $("msg-input");
+const sendBtn = $("send-btn");
+const stateEl = $("state-json");
+const badgeEl = $("user-badge");
+
+async function loadMockUsers() {
+  const r = await fetch("/api/mock_users");
+  const data = await r.json();
+  const sel = $("user-select");
+  sel.innerHTML = "";
+  if (!data.users.length) {
+    sel.innerHTML = '<option value="">（mock_users.json 尚未提供）</option>';
+    $("btn-confirm-member").disabled = true;
+  } else {
+    data.users.forEach((u) => {
+      const opt = document.createElement("option");
+      opt.value = u.user_id;
+      opt.textContent = `${u.user_name} (${u.user_id})`;
+      sel.appendChild(opt);
+    });
+  }
+}
+
+$("btn-guest").onclick = () => createSession({ is_logged_in: false });
+$("btn-member").onclick = async () => {
+  await loadMockUsers();
+  $("member-picker").style.display = "block";
+};
+$("btn-confirm-member").onclick = () => {
+  const uid = $("user-select").value;
+  if (!uid) return;
+  createSession({ is_logged_in: true, user_id: uid });
+};
+
+async function createSession(payload) {
+  try {
+    const r = await fetch("/api/session/new", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    sessionId = data.session_id;
+    $("identity-modal").style.display = "none";
+    inputEl.disabled = false;
+    sendBtn.disabled = false;
+    inputEl.focus();
+    const u = data.state.user_info;
+    badgeEl.textContent = u.is_logged_in
+      ? `會員：${u.user_name} (${u.user_id})`
+      : "訪客模式";
+    renderState(data.state);
+  } catch (e) {
+    alert("建立 session 失敗：" + e.message);
+  }
+}
+
+function appendMessage(content, role, type) {
+  const div = document.createElement("div");
+  div.className = `msg ${role}` + (type ? ` ${type}` : "");
+  div.textContent = content;
+  if (type) {
+    const meta = document.createElement("span");
+    meta.className = "meta";
+    meta.textContent = type;
+    div.appendChild(meta);
+  }
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+  return div;
+}
+
+function renderState(state) {
+  stateEl.textContent = JSON.stringify(state, null, 2);
+}
+
+async function send() {
+  const text = inputEl.value.trim();
+  if (!text || !sessionId) return;
+  appendMessage(text, "user");
+  inputEl.value = "";
+  inputEl.disabled = true;
+  sendBtn.disabled = true;
+
+  const placeholder = appendMessage("...", "ai");
+
+  try {
+    const r = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, message: text }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const data = await r.json();
+    placeholder.remove();
+    const msgEl = appendMessage(data.ai_response, "ai", data.response_type);
+    if (data.show_ticket_button) {
+      attachTicketButton(msgEl);
+    }
+    renderState(data.state);
+  } catch (e) {
+    placeholder.textContent = "錯誤：" + e.message;
+  } finally {
+    inputEl.disabled = false;
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
+}
+
+function attachTicketButton(msgEl) {
+  const btn = document.createElement("button");
+  btn.className = "ticket-btn";
+  btn.textContent = "建立工單";
+  btn.onclick = async () => {
+    btn.disabled = true;
+    btn.textContent = "處理中...";
+    try {
+      const r = await fetch("/api/ticket/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      const data = await r.json();
+      const newMsg = appendMessage(data.ai_response, "ai", data.response_type);
+      if (data.show_ticket_button) attachTicketButton(newMsg);
+      renderState(data.state);
+      btn.remove();
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = "建立工單";
+      alert("建立工單失敗：" + e.message);
+    }
+  };
+  msgEl.appendChild(document.createElement("br"));
+  msgEl.appendChild(btn);
+}
+
+sendBtn.onclick = send;
+inputEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+});
+</script>
+</body>
+</html>

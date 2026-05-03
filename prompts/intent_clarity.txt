@@ -1,0 +1,82 @@
+分析用戶最新訊息，判斷意圖。只回傳合法 JSON，不要其他文字。
+
+用戶訊息：「{user_message}」
+
+最近對話歷史：
+{recent_history}
+
+當前已記錄的意圖清單（intent_log）：
+{intent_log_str}
+
+# 你的判斷任務
+
+對用戶這次訊息中提到的每個獨立意圖做標記，並判斷用戶有沒有自己排優先順序。
+
+## 每個意圖的 role 標記（重要）
+
+- **primary** = 用戶明確要處理的問題（不論是單一意圖還是多個並列都算 primary）
+- **secondary** = 用戶有提到但明顯是「順便」、「附帶」、「次要」的問題
+   訊號詞：「順便問」「另外」「還有一個小問題」「另外一個比較不重要的」
+- **context** = 純粹是脈絡描述、不是要處理的獨立意圖
+   訊號詞：「我...因為...」中的「因為」之後通常是 context
+
+範例：
+- 「我想退款」→ [{{退款, primary}}]
+- 「我有 3 個問題：發票、退費、影片」→ [{{發票, primary}}, {{退費, primary}}, {{影片, primary}}]
+- 「我發票要先解決，順便看一下退費」→ [{{發票, primary}}, {{退費, secondary}}]
+- 「我付費後想退費」→ [{{退費, primary}}, {{付費, context}}]
+- 「想退款，因為影片看不順」→ [{{退款, primary}}, {{影片, context}}]
+
+## user_specified_priority 判斷
+
+用戶有沒有自己明示優先順序？
+- true：用戶用「先處理 X」「X 比較重要」「先看 X，順便看 Y」這類詞表態
+- false：用戶並列丟出問題、沒講順序
+
+## needs_user_selection 推論規則
+
+- 如果 `user_specified_priority` = true → false（用戶已表態，不用問）
+- 如果 primary role 數量 = 1 → false（只有一個主訴，直接處理）
+- 如果 primary role 數量 ≥ 2 且 user_specified_priority = false → true（要叫用戶選）
+
+## referenced_intent_index（指稱詞處理）
+
+若用戶用指稱性詞彙（沒指出具體問題），例如：
+「下一個問題呢」、「另外那個」、「剩下的」、「另一個是什麼」、「那發票呢」
+
+且 intent_log 還有 status 為 pending 或 answered 的項目：
+→ referenced_intent_index 填**對應 intent_log 項目的索引（0-based）**
+→ detected_intents 填空陣列 []
+
+優先順序：先選 status=pending 最早的；無 pending 才選 status=answered 最早的。
+
+若沒有指稱性詞彙、或 intent_log 沒有可參照項，referenced_intent_index = null。
+
+## 業務範圍標記（in_scope）
+
+每個意圖都要標 in_scope（true / false）：
+- **true** = HiSKIO 業務範圍：課程內容、影片播放、帳號、付款、退款、發票、平台操作
+- **false** = 非業務範圍：食物、水果、寵物、推薦商品、天氣、新聞、寫作業、質疑系統
+
+即使 in_scope=false 也要列出，不可偷偷過濾。
+
+## 嚴格規則
+
+- detected_intents 內部不可重複
+- role 為 context 的不算待辦，但仍要列出
+- 用戶訊息中提到的每個獨立意圖都要列出，不可漏
+
+# 輸出格式
+
+{{
+  "detected_intents": [
+    {{"text": "意圖 1", "role": "primary", "in_scope": true}},
+    {{"text": "意圖 2", "role": "secondary", "in_scope": true}},
+    {{"text": "意圖 3", "role": "context", "in_scope": false}}
+  ],
+  "user_specified_priority": true 或 false,
+  "needs_user_selection": true 或 false,
+  "referenced_intent_index": 0 或 null
+}}
+
+只輸出 JSON，不要其他文字。

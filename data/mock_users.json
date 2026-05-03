@@ -1,0 +1,20 @@
+[
+    {
+        "user_id": "user_001",
+        "user_name": "王小明",
+        "user_email": "wang@example.com",
+        "purchase_history": ["python_basics", "ai_fundamentals"]
+    },
+    {
+        "user_id": "user_002",
+        "user_name": "李小華",
+        "user_email": "li@example.com",
+        "purchase_history": ["web_development_2024"]
+    },
+    {
+        "user_id": "user_003",
+        "user_name": "陳大偉",
+        "user_email": "chen@example.com",
+        "purchase_history": []
+    }
+]
