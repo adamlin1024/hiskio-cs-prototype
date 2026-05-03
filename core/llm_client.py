@@ -20,7 +20,7 @@ _client: Anthropic | None = None
 def _get_client() -> Anthropic:
     global _client
     if _client is None:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
         if not api_key:
             raise RuntimeError("ANTHROPIC_API_KEY 未設定，請檢查 .env")
         _client = Anthropic(api_key=api_key)
@@ -28,7 +28,9 @@ def _get_client() -> Anthropic:
 
 
 def _model(env_key: str, default: str) -> str:
-    return os.getenv(env_key, default)
+    """讀環境變數的 model ID，自動 strip 前後空白避免設定時誤打字導致 404。"""
+    value = (os.getenv(env_key) or "").strip()
+    return value or default
 
 
 def call_claude(
