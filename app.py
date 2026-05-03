@@ -104,6 +104,35 @@ class TicketReq(BaseModel):
     session_id: str
 
 
+@app.get("/api/debug/probe")
+def debug_probe():
+    """Debug：在伺服器環境測試各 model 與 key 狀態，用完務必移除。"""
+    import os, anthropic
+    from anthropic import Anthropic
+    key = os.getenv("ANTHROPIC_API_KEY", "")
+    result = {
+        "env_MODEL_SONNET": os.getenv("MODEL_SONNET"),
+        "env_MODEL_HAIKU": os.getenv("MODEL_HAIKU"),
+        "key_length": len(key),
+        "key_first_10": key[:10],
+        "key_last_4": key[-4:] if len(key) > 4 else "",
+        "key_has_whitespace": any(c.isspace() for c in key),
+        "anthropic_sdk_version": anthropic.__version__,
+        "model_tests": {},
+    }
+    client = Anthropic(api_key=key)
+    for model in ["claude-haiku-4-5-20251001", "claude-sonnet-4-5", "claude-sonnet-4-6"]:
+        try:
+            r = client.messages.create(
+                model=model, max_tokens=10,
+                messages=[{"role": "user", "content": "hi"}]
+            )
+            result["model_tests"][model] = {"ok": True, "text": r.content[0].text[:30]}
+        except Exception as e:
+            result["model_tests"][model] = {"ok": False, "error": f"{type(e).__name__}: {str(e)[:200]}"}
+    return result
+
+
 @app.post("/api/ticket/create")
 def create_ticket(req: TicketReq):
     """前端「建立工單」按鈕觸發，跳過「好/不用」直接走收 email / 建單流程。"""
