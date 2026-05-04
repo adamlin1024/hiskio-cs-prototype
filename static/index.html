@@ -691,11 +691,11 @@ function appendMessage(content, role, type) {
   if (type) {
     const meta = document.createElement("span");
     meta.className = "meta";
-    // 顯示 type + tooltip 顯示中文說明
+    // 顯示中文標籤（取自 LEGEND，已含括號內英文 type）；hover 顯示完整說明
     const legend = LEGEND.find((l) => l.type === type);
-    meta.textContent = type;
+    meta.textContent = legend ? legend.label : type;
     if (legend) {
-      meta.title = legend.label + "\n" + legend.desc;
+      meta.title = legend.desc;
       meta.style.cursor = "help";
     }
     div.appendChild(meta);

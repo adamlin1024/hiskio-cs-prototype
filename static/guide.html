@@ -188,27 +188,50 @@
   <div class="legend-row"><div class="bar" style="background:#dc2626"></div><div class="text"><strong>紅色 — 對話結束 (session_ended)</strong><small>工單已建立或對話結束，提示用戶按「新對話」重新開始。</small></div></div>
 
   <h2 id="flow">系統運作流程</h2>
-  <p>每一輪用戶訊息進來，依以下順序處理（前一步沒命中才會進到下一步）：</p>
+  <p>每一輪用戶訊息進來，依以下順序處理（前一步沒命中才會進到下一步）。<strong>每個步驟有標明用什麼模型（Sonnet/Haiku）或純程式（regex）</strong>：</p>
   <ol>
     <li>
-      <strong>① 特殊 phase 攔截</strong>：如果系統正在等待用戶回應特定階段（等待工單確認、等待 Email、等待用戶從多重意圖選一個、對話已結束），<strong>直接交給對應 handler 處理</strong>，不打主管。
+      <strong>① 特殊 phase 攔截</strong> <span style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:12px;">純程式</span><br>
+      檢查 <code>state.phase</code>：如果在等待工單確認、等待 Email、等待用戶從多重意圖選一個、對話已結束，<strong>直接交給對應 handler 處理</strong>。不呼叫 LLM。
     </li>
     <li>
-      <strong>② Greeting fast-path（regex）</strong>：用 regex 比對純招呼字串（你好／Hi／嗨／在嗎／hello 等整句），命中直接走 greeting handler 生問候語，<strong>不打 Sonnet 主管</strong>。<br>
-      <em style="color:#6b7280;font-size:13px;">※ 這是 v4 階段就加的省成本機制，由 regex 完成（不是 Haiku 粗判），目的：純問候不需要 Sonnet 思考。</em>
+      <strong>② Greeting fast-path</strong> <span style="background:#cffafe;padding:2px 8px;border-radius:4px;font-size:12px;">regex 純程式</span><br>
+      regex 比對「整句剛好是純招呼字串」（你好／Hi／嗨／在嗎／hello）。<br>
+      <strong>命中</strong> → 跳過 Sonnet 主管，直接由 Haiku 生問候語回應<br>
+      <strong>沒命中</strong>（例如「helloo」「你好啊請問」）→ 往下走主管判斷
     </li>
     <li>
-      <strong>③ Sonnet 主管統一決策</strong>：上面兩關都沒攔下時，由 Sonnet 主管接手。它看「<strong>完整對話歷史 + intent_log + 系統狀態 + FAQ 清單 + KB 索引</strong>」，輸出一個 action（共 10 種）+ 該 action 需要的 payload（要用哪個 FAQ、哪些 KB 文章等）。
+      <strong>③ Sonnet 主管統一決策</strong> <span style="background:#ede9fe;padding:2px 8px;border-radius:4px;font-size:12px;color:#7c3aed;font-weight:bold;">Sonnet 4.6</span><br>
+      看「完整對話歷史 + intent_log + 系統狀態 + FAQ 清單 + KB 索引」，輸出一個 action（共 10 種）+ 該 action 需要的 payload（要用哪個 FAQ、哪些 KB 文章等）。<br>
+      <strong>有 prompt caching</strong>：固定部分（規則 + FAQ list + KB 索引）走快取省 90% input cost。
     </li>
     <li>
-      <strong>④ 執行者派任務</strong>：orchestrator 看主管的 action 派給對應節點：FAQ 回應器、cs_response（用 KB 生答案）、no_kb_handler（KB 沒命中時誠實告知）、off_topic（離題回應）、ticket_handler（建單流程）等。
+      <strong>④ 執行者派任務</strong> <span style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:12px;">純程式</span><br>
+      orchestrator 看主管 action 派給對應節點。每個節點用的模型不同：
+      <ul style="margin-top:6px;font-size:13px;">
+        <li><code>faq_responder</code> → <span style="color:#0284c7;font-weight:bold;">Haiku</span>（照 FAQ 模板潤飾）</li>
+        <li><code>cs_response</code> → <span style="color:#7c3aed;font-weight:bold;">Sonnet</span>（用 KB 生 RAG 答案，有 caching）</li>
+        <li><code>no_kb_handler</code> → <span style="color:#0284c7;font-weight:bold;">Haiku</span>（誠實告知不知道）</li>
+        <li><code>off_topic</code> → <span style="color:#0284c7;font-weight:bold;">Haiku</span>（離題回應）</li>
+        <li><code>greeting_handler</code> → <span style="color:#0284c7;font-weight:bold;">Haiku</span>（生問候語）</li>
+        <li><code>clarification_handler</code> → <span style="color:#0284c7;font-weight:bold;">Haiku</span>（請用戶補充）</li>
+        <li><code>ticket_handler.decide</code> → <span style="color:#0284c7;font-weight:bold;">Haiku</span>（判 yes/no）</li>
+        <li><code>ticket.generate_summary</code> → <span style="color:#7c3aed;font-weight:bold;">Sonnet</span>（生工單摘要）</li>
+      </ul>
     </li>
     <li>
-      <strong>⑤ 背景評估（Haiku）</strong>：對話結束後 Haiku 跑一次評估，把情緒、分類、是否確認解決等資訊寫回 State 供下輪參考。
+      <strong>⑤ 背景評估</strong> <span style="background:#fef9c3;padding:2px 8px;border-radius:4px;font-size:12px;color:#0284c7;font-weight:bold;">Haiku 4.5</span><br>
+      對話結束後跑評估，把情緒、分類、是否確認解決等資訊寫回 State 供下輪參考。
     </li>
   </ol>
+
   <div class="note">
-    主管模式的核心優勢：每輪都看「全貌」做決策，避免歷史污染或邊界 case 處理不一致。
+    <strong>常見誤解澄清</strong>：「greeting 是不是用 Sonnet 處理？」
+    <ul style="margin:6px 0;">
+      <li>純招呼（regex 命中）→ <strong>完全不打 Sonnet</strong>，由 Haiku 直接生問候</li>
+      <li>帶錯字／變化型招呼（regex 沒命中）→ Sonnet 主管接手判斷後也選 greeting action → 還是叫 Haiku 生問候</li>
+      <li><strong>無論哪條路徑，最終問候訊息都是 Haiku 生成的</strong>。差別只在「有沒有呼叫 Sonnet 做路由判斷」（影響成本）</li>
+    </ul>
   </div>
 
   <h3>主管的 10 種 action</h3>
@@ -227,118 +250,363 @@
     <tr><td><code>greeting</code></td><td>純打招呼</td><td>備案，多數情況被 ② fast-path 先攔</td></tr>
   </table>
 
-  <h3>架構圖</h3>
-  <p>整體訊息處理路徑：</p>
-  <div style="text-align:center; background:#fff; border:1px solid #e3e5ea; border-radius:8px; padding:16px; overflow-x:auto;">
-    <svg width="900" height="780" viewBox="0 0 900 780" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;">
+  <h3>架構圖（左：流程；右：共用 State）</h3>
+  <p>圖示說明：<span style="background:#ede9fe;padding:2px 8px;border-radius:4px;color:#7c3aed;font-weight:bold;">紫色 = Sonnet 4.6</span>　<span style="background:#dbeafe;padding:2px 8px;border-radius:4px;color:#0284c7;font-weight:bold;">藍色 = Haiku 4.5</span>　<span style="background:#fef3c7;padding:2px 8px;border-radius:4px;color:#a16207;font-weight:bold;">黃色 = 純程式 / regex</span></p>
+  <div style="background:#fff; border:1px solid #e3e5ea; border-radius:8px; padding:16px; overflow-x:auto;">
+    <svg width="1400" height="1480" viewBox="0 0 1400 1480" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;">
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
           <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
         </marker>
+        <marker id="arrow-state" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+        </marker>
         <style>
-          .box { fill: #fff; stroke: #475569; stroke-width: 1.5; rx: 8; ry: 8; }
-          .box-input { fill: #dbeafe; stroke: #2563eb; }
-          .box-phase { fill: #fef3c7; stroke: #d97706; }
-          .box-fast { fill: #cffafe; stroke: #0891b2; }
-          .box-manager { fill: #ede9fe; stroke: #7c3aed; stroke-width: 2.5; }
-          .box-action { fill: #f3f4f6; stroke: #6b7280; }
-          .box-end { fill: #dcfce7; stroke: #16a34a; }
-          .label { font-family: -apple-system, sans-serif; font-size: 13px; fill: #1f2937; text-anchor: middle; }
+          .box { fill: #fff; stroke: #475569; stroke-width: 1.5; rx: 6; ry: 6; }
+          .box-sonnet { fill: #ede9fe; stroke: #7c3aed; stroke-width: 2; }
+          .box-haiku  { fill: #dbeafe; stroke: #0284c7; stroke-width: 1.5; }
+          .box-code   { fill: #fef3c7; stroke: #a16207; stroke-width: 1.5; }
+          .box-end    { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.5; }
+          .stage-bg   { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1; stroke-dasharray: 5,3; rx: 8; ry: 8; }
+          .stage-label{ font-family: -apple-system, sans-serif; font-size: 13px; font-weight: bold; fill: #475569; }
+          .label      { font-family: -apple-system, sans-serif; font-size: 12px; fill: #1f2937; text-anchor: middle; }
           .label-bold { font-weight: bold; }
-          .label-small { font-size: 11px; fill: #6b7280; }
-          .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
-          .arrow-skip { stroke-dasharray: 4,3; }
+          .label-mini { font-size: 10px; fill: #6b7280; }
+          .label-tag  { font-size: 9px; font-weight: bold; }
+          .arrow      { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+          .arrow-thin { stroke: #94a3b8; stroke-width: 1; fill: none; stroke-dasharray: 3,2; marker-end: url(#arrow-state); }
+          .branch-label { font-size: 10px; fill: #475569; }
+          .state-section { fill: #fff7ed; stroke: #fb923c; stroke-width: 1; rx: 4; ry: 4; }
+          .state-title { font-size: 11px; font-weight: bold; fill: #c2410c; }
+          .state-field { font-size: 10px; fill: #475569; font-family: ui-monospace, monospace; }
         </style>
       </defs>
 
-      <!-- 用戶訊息 -->
-      <rect class="box box-input" x="350" y="20" width="200" height="50"/>
-      <text class="label label-bold" x="450" y="42">用戶訊息進來</text>
-      <text class="label label-small" x="450" y="58">POST /api/chat</text>
+      <!-- ───────── 階段標籤（左側 banner）───────── -->
+      <text class="stage-label" x="20" y="100">階段 0</text>
+      <text class="stage-label" x="20" y="115">入口攔截</text>
 
-      <!-- 1. Phase 攔截 -->
-      <line class="arrow" x1="450" y1="70" x2="450" y2="100"/>
-      <rect class="box box-phase" x="270" y="100" width="360" height="80"/>
-      <text class="label label-bold" x="450" y="122">① 特殊 phase 攔截</text>
-      <text class="label label-small" x="450" y="140">等待工單確認 / 等待 Email / 等待用戶選擇意圖 / 已結束</text>
-      <text class="label label-small" x="450" y="158">→ 命中：直接交給對應 handler</text>
-      <text class="label label-small" x="450" y="173">→ 沒命中：往下走</text>
+      <text class="stage-label" x="20" y="270">階段 1</text>
+      <text class="stage-label" x="20" y="285">主管決策</text>
 
-      <!-- 2. Greeting fast-path -->
-      <line class="arrow" x1="450" y1="180" x2="450" y2="210"/>
-      <rect class="box box-fast" x="270" y="210" width="360" height="70"/>
-      <text class="label label-bold" x="450" y="232">② Greeting fast-path（regex）</text>
-      <text class="label label-small" x="450" y="252">純招呼字串攔截：「你好/Hi/嗨/在嗎/hello」</text>
-      <text class="label label-small" x="450" y="268">→ 命中：直接走 greeting handler（不打 Sonnet）</text>
+      <text class="stage-label" x="20" y="500">階段 2</text>
+      <text class="stage-label" x="20" y="515">執行者派任</text>
 
-      <!-- 3. Manager -->
-      <line class="arrow" x1="450" y1="280" x2="450" y2="310"/>
-      <rect class="box box-manager" x="220" y="310" width="460" height="100"/>
-      <text class="label label-bold" x="450" y="332" style="font-size:14px;fill:#7c3aed">③ Sonnet 主管統一決策</text>
-      <text class="label label-small" x="450" y="352">看：用戶訊息 + 完整對話歷史 + intent_log + 系統狀態 + FAQ list + KB 索引</text>
-      <text class="label label-small" x="450" y="370">輸出：action（10 選 1）+ payload（faq_id / kb_ids / 訊息等）</text>
-      <text class="label label-small" x="450" y="388">+ 偵測到的新意圖（含 role、in_scope）</text>
-      <text class="label label-small" x="450" y="402" style="fill:#7c3aed">含 prompt caching：固定部分快取省 90% input cost</text>
+      <text class="stage-label" x="20" y="900">階段 3</text>
+      <text class="stage-label" x="20" y="915">背景評估</text>
 
-      <!-- 4. Action 派發 -->
-      <line class="arrow" x1="450" y1="410" x2="450" y2="440"/>
-      <rect class="box" x="270" y="440" width="360" height="40" style="fill:#fff;stroke:#475569;"/>
-      <text class="label label-bold" x="450" y="465">④ Action Executor 派任務</text>
+      <text class="stage-label" x="20" y="1100">階段 4</text>
+      <text class="stage-label" x="20" y="1115">服務限制 + 工單</text>
 
-      <!-- 執行者節點：分散展開 -->
-      <line class="arrow" x1="450" y1="480" x2="120" y2="520"/>
-      <line class="arrow" x1="450" y1="480" x2="305" y2="520"/>
-      <line class="arrow" x1="450" y1="480" x2="450" y2="520"/>
-      <line class="arrow" x1="450" y1="480" x2="595" y2="520"/>
-      <line class="arrow" x1="450" y1="480" x2="780" y2="520"/>
+      <!-- ───────── 用戶訊息（最頂端）───────── -->
+      <rect class="box" x="380" y="20" width="240" height="44" style="fill:#1e293b;stroke:#1e293b"/>
+      <text class="label label-bold" x="500" y="40" style="fill:#fff">用戶訊息進來</text>
+      <text class="label-mini" x="500" y="55" style="fill:#cbd5e1">POST /api/chat</text>
 
-      <!-- 5 個執行者 -->
-      <rect class="box box-action" x="40" y="520" width="160" height="55"/>
-      <text class="label label-bold" x="120" y="540">faq_responder</text>
-      <text class="label label-small" x="120" y="558">FAQ 標準答案</text>
-      <text class="label label-small" x="120" y="572" style="fill:#16a34a">綠框 (faq)</text>
+      <!-- ───────── 階段 0 (兩個並列攔截) ───────── -->
+      <rect class="stage-bg" x="80" y="78" width="850" height="160"/>
 
-      <rect class="box box-action" x="225" y="520" width="160" height="55"/>
-      <text class="label label-bold" x="305" y="540">cs_response</text>
-      <text class="label label-small" x="305" y="558">用 KB 生 RAG 答案</text>
-      <text class="label label-small" x="305" y="572" style="fill:#2563eb">藍框 (rag)</text>
+      <!-- phase 攔截 -->
+      <line class="arrow" x1="430" y1="64" x2="280" y2="100"/>
+      <rect class="box box-code" x="100" y="100" width="360" height="120"/>
+      <text class="label-tag" x="280" y="118" style="fill:#a16207">純程式攔截</text>
+      <text class="label label-bold" x="280" y="135">① 特殊 phase 攔截</text>
+      <text class="label-mini" x="280" y="155">if state.phase in:</text>
+      <text class="label-mini" x="280" y="170">　等待工單確認 / 等待 Email</text>
+      <text class="label-mini" x="280" y="183">　等待用戶選擇意圖 / 已結束</text>
+      <text class="label-mini" x="280" y="200" style="fill:#16a34a;font-weight:bold">命中 → 跳過主管，直接進對應 handler</text>
+      <text class="label-mini" x="280" y="213">沒命中 → 往下走 ↓</text>
 
-      <rect class="box box-action" x="370" y="520" width="160" height="55"/>
-      <text class="label label-bold" x="450" y="540">no_kb_handler</text>
-      <text class="label label-small" x="450" y="558">承認不知道+建單</text>
-      <text class="label label-small" x="450" y="572" style="fill:#ec4899">粉紅框 (no_kb_match)</text>
+      <!-- greeting fast-path -->
+      <line class="arrow" x1="570" y1="64" x2="730" y2="100"/>
+      <rect class="box box-code" x="550" y="100" width="360" height="120"/>
+      <text class="label-tag" x="730" y="118" style="fill:#a16207">regex 攔截</text>
+      <text class="label label-bold" x="730" y="135">② Greeting fast-path</text>
+      <text class="label-mini" x="730" y="155">if _GREETING_RE.match(msg):</text>
+      <text class="label-mini" x="730" y="170">　純招呼整句：你好/Hi/嗨/hello</text>
+      <text class="label-mini" x="730" y="185">　/在嗎/早安/晚安 等</text>
+      <text class="label-mini" x="730" y="200" style="fill:#16a34a;font-weight:bold">命中 → 直接派 greeting_handler</text>
+      <text class="label-mini" x="730" y="213">沒命中 → 往下走 ↓</text>
 
-      <rect class="box box-action" x="515" y="520" width="160" height="55"/>
-      <text class="label label-bold" x="595" y="540">off_topic</text>
-      <text class="label label-small" x="595" y="558">離題回應</text>
-      <text class="label label-small" x="595" y="572" style="fill:#ea580c">橘框 (off_topic)</text>
+      <!-- 兩條都未命中匯流到主管 -->
+      <line class="arrow" x1="280" y1="220" x2="500" y2="295"/>
+      <line class="arrow" x1="730" y1="220" x2="500" y2="295"/>
 
-      <rect class="box box-action" x="700" y="520" width="160" height="55"/>
-      <text class="label label-bold" x="780" y="540">ticket_handler</text>
-      <text class="label label-small" x="780" y="558">建單流程</text>
-      <text class="label label-small" x="780" y="572" style="fill:#7c3aed">紫框 (ticket_flow)</text>
+      <!-- ───────── 階段 1 主管 ───────── -->
+      <rect class="stage-bg" x="80" y="245" width="850" height="200"/>
 
-      <!-- 5. Evaluator -->
-      <line class="arrow" x1="120" y1="575" x2="450" y2="615"/>
-      <line class="arrow" x1="305" y1="575" x2="450" y2="615"/>
-      <line class="arrow" x1="450" y1="575" x2="450" y2="615"/>
-      <line class="arrow" x1="595" y1="575" x2="450" y2="615"/>
-      <line class="arrow" x1="780" y1="575" x2="450" y2="615"/>
+      <rect class="box box-sonnet" x="180" y="295" width="640" height="140"/>
+      <text class="label-tag" x="500" y="313" style="fill:#7c3aed">Sonnet 4.6</text>
+      <text class="label label-bold" x="500" y="332" style="font-size:14px;fill:#7c3aed">主管統一決策節點 (manager.decide)</text>
+      <text class="label-mini" x="500" y="352">看：用戶訊息 + 完整對話歷史(10輪) + intent_log + phase + 計數器</text>
+      <text class="label-mini" x="500" y="368">　 + 用戶身分 + 完整 FAQ 清單 + 完整 KB 索引</text>
+      <text class="label-mini" x="500" y="384">輸出 JSON：recommended_action(10選1) + payload(faq_id/kb_ids/clarify_msg)</text>
+      <text class="label-mini" x="500" y="400">　　　　　 + new_intents_to_log(role/in_scope) + reason</text>
+      <text class="label-mini" x="500" y="420" style="fill:#7c3aed;font-weight:bold">★ 有 prompt caching：固定部分快取（規則+FAQ+KB），每次省 90%</text>
 
-      <rect class="box box-action" x="270" y="615" width="360" height="60" style="fill:#fef9c3;stroke:#ca8a04"/>
-      <text class="label label-bold" x="450" y="637">⑤ 背景評估 evaluator（Haiku）</text>
-      <text class="label label-small" x="450" y="655">寫回情緒、分類、解決確認，供下輪主管參考</text>
-      <text class="label label-small" x="450" y="670">同時更新 intent_log 中當前意圖的 status</text>
+      <!-- ───────── 階段 2 執行者派任 ───────── -->
+      <rect class="stage-bg" x="80" y="465" width="1180" height="395"/>
+
+      <line class="arrow" x1="500" y1="435" x2="500" y2="490"/>
+      <rect class="box" x="350" y="490" width="300" height="36"/>
+      <text class="label label-bold" x="500" y="513">_execute_action（按 action 派發）</text>
+
+      <!-- 第一排執行者：5 個 -->
+      <line class="arrow" x1="500" y1="526" x2="160" y2="580"/>
+      <line class="arrow" x1="500" y1="526" x2="380" y2="580"/>
+      <line class="arrow" x1="500" y1="526" x2="600" y2="580"/>
+      <line class="arrow" x1="500" y1="526" x2="820" y2="580"/>
+      <line class="arrow" x1="500" y1="526" x2="1040" y2="580"/>
+
+      <text class="branch-label" x="280" y="555">greeting</text>
+      <text class="branch-label" x="455" y="555">clarify / unclear</text>
+      <text class="branch-label" x="660" y="555">answer_with_faq</text>
+      <text class="branch-label" x="900" y="555">answer_with_kb</text>
+      <text class="branch-label" x="1100" y="555">acknowledge_*</text>
+
+      <!-- greeting_handler -->
+      <rect class="box box-haiku" x="65" y="580" width="190" height="110"/>
+      <text class="label-tag" x="160" y="598" style="fill:#0284c7">Haiku</text>
+      <text class="label label-bold" x="160" y="615">greeting_handler</text>
+      <text class="label-mini" x="160" y="633">生問候訊息</text>
+      <text class="label-mini" x="160" y="650" style="fill:#0284c7">寫入 State：</text>
+      <text class="label-mini" x="160" y="665">intent_state.greeting_count++</text>
+      <text class="label-mini" x="160" y="682" style="fill:#16a34a;font-weight:bold">→ 淺藍虛線 greeting</text>
+
+      <!-- clarification_handler -->
+      <rect class="box box-haiku" x="285" y="580" width="190" height="110"/>
+      <text class="label-tag" x="380" y="598" style="fill:#0284c7">Haiku</text>
+      <text class="label label-bold" x="380" y="615">clarification_handler</text>
+      <text class="label-mini" x="380" y="633">請用戶補充</text>
+      <text class="label-mini" x="380" y="650" style="fill:#0284c7">寫入 State：</text>
+      <text class="label-mini" x="380" y="665">intent_state.consecutive_unclear_count++</text>
+      <text class="label-mini" x="380" y="682" style="fill:#eab308;font-weight:bold">→ 橘黃 clarification</text>
+
+      <!-- faq_responder -->
+      <rect class="box box-haiku" x="505" y="580" width="190" height="110"/>
+      <text class="label-tag" x="600" y="598" style="fill:#0284c7">Haiku</text>
+      <text class="label label-bold" x="600" y="615">faq_responder</text>
+      <text class="label-mini" x="600" y="633">FAQ 模板潤飾（核心步驟一字不漏）</text>
+      <text class="label-mini" x="600" y="654" style="fill:#0284c7">寫入 State：</text>
+      <text class="label-mini" x="600" y="668">faq_context.matched_faq_id</text>
+      <text class="label-mini" x="600" y="681">　　　　　　.answer_strategy</text>
+      <text class="label-mini" x="600" y="697" style="fill:#16a34a;font-weight:bold">→ 綠 faq</text>
+
+      <!-- cs_response -->
+      <rect class="box box-sonnet" x="725" y="580" width="190" height="110"/>
+      <text class="label-tag" x="820" y="598" style="fill:#7c3aed">Sonnet (cached)</text>
+      <text class="label label-bold" x="820" y="615">cs_response</text>
+      <text class="label-mini" x="820" y="633">用 KB 文章生 RAG 答案</text>
+      <text class="label-mini" x="820" y="654" style="fill:#0284c7">寫入 State：</text>
+      <text class="label-mini" x="820" y="668">kb_context.indexed_articles</text>
+      <text class="label-mini" x="820" y="681">　　　　　 .articles_used_in_response</text>
+      <text class="label-mini" x="820" y="697" style="fill:#2563eb;font-weight:bold">→ 藍 rag</text>
+
+      <!-- off_topic / no_kb_handler 並排 -->
+      <rect class="box box-haiku" x="945" y="580" width="190" height="50"/>
+      <text class="label-tag" x="1040" y="595" style="fill:#0284c7">Haiku</text>
+      <text class="label label-bold" x="1040" y="613">off_topic</text>
+      <text class="label-mini" x="1040" y="625" style="fill:#ea580c;font-weight:bold">→ 橘 off_topic</text>
+
+      <rect class="box box-haiku" x="945" y="640" width="190" height="50"/>
+      <text class="label-tag" x="1040" y="655" style="fill:#0284c7">Haiku</text>
+      <text class="label label-bold" x="1040" y="673">no_kb_handler</text>
+      <text class="label-mini" x="1040" y="685" style="fill:#ec4899;font-weight:bold">→ 粉紅 no_kb_match</text>
+
+      <!-- 第二排：ticket / list_pending / continue / force_escalation -->
+      <line class="arrow" x1="500" y1="526" x2="160" y2="730"/>
+      <line class="arrow" x1="500" y1="526" x2="380" y2="730"/>
+      <line class="arrow" x1="500" y1="526" x2="600" y2="730"/>
+      <line class="arrow" x1="500" y1="526" x2="820" y2="730"/>
+
+      <text class="branch-label" x="160" y="725">suggest_ticket</text>
+      <text class="branch-label" x="380" y="725">list_pending_intents</text>
+      <text class="branch-label" x="600" y="725">continue_intent</text>
+      <text class="branch-label" x="820" y="725">force_escalation</text>
+
+      <!-- ticket_handler -->
+      <rect class="box box-haiku" x="65" y="730" width="190" height="110"/>
+      <text class="label-tag" x="160" y="748" style="fill:#0284c7">Haiku + Sonnet</text>
+      <text class="label label-bold" x="160" y="765">ticket_handler</text>
+      <text class="label-mini" x="160" y="783">decide(Y/N/U) Haiku</text>
+      <text class="label-mini" x="160" y="797">create_ticket Sonnet 摘要</text>
+      <text class="label-mini" x="160" y="814" style="fill:#0284c7">寫入 State：</text>
+      <text class="label-mini" x="160" y="828" style="fill:#7c3aed;font-weight:bold">ticket_state.ticket_id 等</text>
+
+      <!-- intent_selector -->
+      <rect class="box box-haiku" x="285" y="730" width="190" height="110"/>
+      <text class="label-tag" x="380" y="748" style="fill:#0284c7">Haiku</text>
+      <text class="label label-bold" x="380" y="765">intent_selector</text>
+      <text class="label-mini" x="380" y="783">列 intent_log 待辦清單</text>
+      <text class="label-mini" x="380" y="800" style="fill:#0284c7">寫入 State：</text>
+      <text class="label-mini" x="380" y="814">phase = 等待用戶選擇意圖</text>
+      <text class="label-mini" x="380" y="828" style="fill:#4c1d95;font-weight:bold">→ 深紫 intent_selection</text>
+
+      <!-- continue_intent (沿用 cs_response) -->
+      <rect class="box" x="505" y="730" width="190" height="110" style="fill:#f3f4f6"/>
+      <text class="label-tag" x="600" y="748" style="fill:#6b7280">沿用既有節點</text>
+      <text class="label label-bold" x="600" y="765">continue_intent</text>
+      <text class="label-mini" x="600" y="783">不切意圖，</text>
+      <text class="label-mini" x="600" y="797">繼續走 cs_response</text>
+      <text class="label-mini" x="600" y="817" style="fill:#0284c7">不寫入新 State</text>
+
+      <!-- force_escalation -->
+      <rect class="box box-code" x="725" y="730" width="190" height="110"/>
+      <text class="label-tag" x="820" y="748" style="fill:#a16207">純程式</text>
+      <text class="label label-bold" x="820" y="765">force_escalation</text>
+      <text class="label-mini" x="820" y="783">unclear 連 3 次</text>
+      <text class="label-mini" x="820" y="800" style="fill:#0284c7">寫入 State：</text>
+      <text class="label-mini" x="820" y="814">ticket_suggested = True</text>
+      <text class="label-mini" x="820" y="828" style="fill:#7c3aed;font-weight:bold">→ 紫 ticket_flow</text>
+
+      <!-- ───────── 階段 3 evaluator ───────── -->
+      <rect class="stage-bg" x="80" y="880" width="1180" height="120"/>
+      <line class="arrow" x1="160" y1="840" x2="500" y2="920"/>
+      <line class="arrow" x1="380" y1="840" x2="500" y2="920"/>
+      <line class="arrow" x1="600" y1="697" x2="500" y2="920"/>
+      <line class="arrow" x1="820" y1="697" x2="500" y2="920"/>
+
+      <rect class="box box-haiku" x="280" y="920" width="440" height="70"/>
+      <text class="label-tag" x="500" y="938" style="fill:#0284c7">Haiku 4.5</text>
+      <text class="label label-bold" x="500" y="955">背景評估 evaluator</text>
+      <text class="label-mini" x="500" y="972">只在 customer_service 路徑且 phase=對話中時跑</text>
+      <text class="label-mini" x="500" y="985" style="fill:#0284c7">寫入：issue_context（情緒/分類/摘要）+ intent_log status</text>
+
+      <!-- ───────── 階段 4 服務限制 + 工單 ───────── -->
+      <rect class="stage-bg" x="80" y="1015" width="1180" height="320"/>
+
+      <line class="arrow" x1="500" y1="990" x2="500" y2="1040"/>
+      <rect class="box box-code" x="280" y="1040" width="440" height="100"/>
+      <text class="label-tag" x="500" y="1058" style="fill:#a16207">純程式</text>
+      <text class="label label-bold" x="500" y="1077">check_and_update_limits</text>
+      <text class="label-mini" x="500" y="1097">檢查 4 個計數器：turn / off_topic / low_conf / unresolved</text>
+      <text class="label-mini" x="500" y="1112">任一達 max → service_limits.limit_reached = True</text>
+      <text class="label-mini" x="500" y="1127" style="fill:#7c3aed;font-weight:bold">下一輪用戶說話時自動觸發 suggest_ticket（紫框建議建單）</text>
+
+      <!-- 工單流程 phase 切換 -->
+      <line class="arrow" x1="500" y1="1140" x2="500" y2="1175"/>
+      <rect class="box" x="180" y="1175" width="640" height="130" style="fill:#fef3c7;stroke:#a16207"/>
+      <text class="label label-bold" x="500" y="1195">工單流程 phase 切換（多階段狀態機）</text>
+      <text class="label-mini" x="500" y="1215">建議建單 → phase=等待工單確認 → 用戶回「好/不用」（Haiku 判 Y/N/U）</text>
+      <text class="label-mini" x="500" y="1230">↓ 同意</text>
+      <text class="label-mini" x="500" y="1248">會員：自動帶 user_email 建單　訪客：phase=等待 Email → 收 + regex 驗證</text>
+      <text class="label-mini" x="500" y="1265">↓ Email OK</text>
+      <text class="label-mini" x="500" y="1283">Sonnet 生工單摘要 → INSERT SQLite tickets 表 → phase=已結束</text>
+      <text class="label-mini" x="500" y="1298" style="fill:#dc2626;font-weight:bold">→ 紅 session_ended</text>
 
       <!-- 結尾 -->
-      <line class="arrow" x1="450" y1="675" x2="450" y2="705"/>
-      <rect class="box box-end" x="350" y="705" width="200" height="50"/>
-      <text class="label label-bold" x="450" y="727">回應給用戶</text>
-      <text class="label label-small" x="450" y="743">含 ai_response + state</text>
+      <line class="arrow" x1="500" y1="1305" x2="500" y2="1340"/>
+      <rect class="box box-end" x="380" y="1340" width="240" height="44"/>
+      <text class="label label-bold" x="500" y="1362">save_state + 回應給用戶</text>
+      <text class="label-mini" x="500" y="1377">JSON 含 ai_response + 完整 state</text>
+
+      <!-- ───────── 右側：共享 State (JSON) 結構 ───────── -->
+      <rect x="970" y="80" width="410" height="780" style="fill:#fffbeb;stroke:#f59e0b;stroke-width:2;rx:8;"/>
+      <text x="1175" y="105" style="font-family:-apple-system;font-size:14px;font-weight:bold;fill:#92400e;text-anchor:middle">共享 State (JSON)</text>
+      <text x="1175" y="123" style="font-family:-apple-system;font-size:11px;fill:#92400e;text-anchor:middle">所有節點共讀共寫，每輪結束 save_state 回 SQLite</text>
+
+      <!-- Session 基本 -->
+      <rect class="state-section" x="985" y="135" width="380" height="65"/>
+      <text class="state-title" x="995" y="150">📌 Session 基本</text>
+      <text class="state-field" x="995" y="166">session_id, created_at, updated_at</text>
+      <text class="state-field" x="995" y="180">phase ←（節點切換時改）</text>
+      <text class="state-field" x="995" y="194">turn_count ←（每輪+1，greeting 不增）</text>
+
+      <!-- user_info -->
+      <rect class="state-section" x="985" y="208" width="380" height="65"/>
+      <text class="state-title" x="995" y="223">👤 user_info</text>
+      <text class="state-field" x="995" y="239">is_logged_in, user_id, user_name</text>
+      <text class="state-field" x="995" y="253">user_email, purchase_history</text>
+      <text class="state-field" x="995" y="267" style="fill:#16a34a">主管讀取做為決策依據</text>
+
+      <!-- intent_state -->
+      <rect class="state-section" x="985" y="281" width="380" height="120" style="fill:#fce7f3;stroke:#ec4899"/>
+      <text class="state-title" x="995" y="296" style="fill:#be185d">🎯 intent_state（v6 主管模式核心）</text>
+      <text class="state-field" x="995" y="312">input_classification ← manager 寫入</text>
+      <text class="state-field" x="995" y="326">consecutive_unclear_count（達 3 強制建單）</text>
+      <text class="state-field" x="995" y="340">greeting_count, max_greeting_count</text>
+      <text class="state-field" x="995" y="354">current_intent ← 切換意圖時改</text>
+      <text class="state-field" x="995" y="368">intent_log[ ] ← 永不刪除</text>
+      <text class="state-field" x="1015" y="382">{ text, status, role, in_scope, first_turn }</text>
+      <text class="state-field" x="995" y="396" style="fill:#16a34a">主管 + evaluator + selector 共寫</text>
+
+      <!-- issue_context -->
+      <rect class="state-section" x="985" y="409" width="380" height="65"/>
+      <text class="state-title" x="995" y="424">📊 issue_context</text>
+      <text class="state-field" x="995" y="440">category, sub_category, summary</text>
+      <text class="state-field" x="995" y="454">user_emotion ← evaluator 寫入</text>
+
+      <!-- faq_context -->
+      <rect class="state-section" x="985" y="482" width="380" height="55"/>
+      <text class="state-title" x="995" y="497">❓ faq_context</text>
+      <text class="state-field" x="995" y="513">matched_faq_id, match_confidence</text>
+      <text class="state-field" x="995" y="527">answer_strategy ← faq_responder 寫入</text>
+
+      <!-- kb_context -->
+      <rect class="state-section" x="985" y="545" width="380" height="55"/>
+      <text class="state-title" x="995" y="560">📚 kb_context</text>
+      <text class="state-field" x="995" y="576">indexed_articles ← manager 挑選</text>
+      <text class="state-field" x="995" y="590">articles_used_in_response ← cs_response 寫</text>
+
+      <!-- service_limits -->
+      <rect class="state-section" x="985" y="608" width="380" height="100"/>
+      <text class="state-title" x="995" y="623">🚫 service_limits</text>
+      <text class="state-field" x="995" y="639">max_turns_per_session: 20</text>
+      <text class="state-field" x="995" y="653">max_off_topic_count: 3</text>
+      <text class="state-field" x="995" y="667">max_low_confidence_count: 3</text>
+      <text class="state-field" x="995" y="681">max_unresolved_count: 3</text>
+      <text class="state-field" x="995" y="695">limit_reached, limit_reached_reason</text>
+
+      <!-- ticket_state -->
+      <rect class="state-section" x="985" y="716" width="380" height="80"/>
+      <text class="state-title" x="995" y="731">🎫 ticket_state</text>
+      <text class="state-field" x="995" y="747">ticket_suggested, user_decision</text>
+      <text class="state-field" x="995" y="761">collecting_email, email_attempts</text>
+      <text class="state-field" x="995" y="775">ticket_id, ticket_created_at</text>
+      <text class="state-field" x="995" y="789" style="fill:#16a34a">ticket_handler 寫入</text>
+
+      <!-- escalation_signals -->
+      <rect class="state-section" x="985" y="804" width="380" height="50"/>
+      <text class="state-title" x="995" y="819">⚠️ escalation_signals</text>
+      <text class="state-field" x="995" y="835">no_kb_match ← no_kb_handler 寫入</text>
+
+      <!-- chat_history（單獨另放，因為很大） -->
+      <rect class="state-section" x="985" y="1010" width="380" height="55" style="fill:#e0e7ff;stroke:#6366f1"/>
+      <text class="state-title" x="995" y="1025" style="fill:#4338ca">💬 chat_history</text>
+      <text class="state-field" x="995" y="1041">每輪 user + assistant 訊息陣列</text>
+      <text class="state-field" x="995" y="1055">含 timestamp, content, response_type</text>
+
+      <!-- 連線示意：State 影響哪些節點 -->
+      <line class="arrow-thin" x1="985" y1="345" x2="820" y2="395"/>
+      <text x="900" y="378" style="font-size:9px;fill:#94a3b8">主管讀</text>
+
+      <line class="arrow-thin" x1="985" y1="685" x2="820" y2="1080"/>
+      <text x="900" y="900" style="font-size:9px;fill:#94a3b8">limits 檢查讀</text>
+
+      <line class="arrow-thin" x1="985" y1="755" x2="280" y2="800"/>
+      <text x="650" y="785" style="font-size:9px;fill:#94a3b8">ticket 流程讀寫</text>
+
+      <!-- 圖例 -->
+      <rect x="985" y="870" width="380" height="125" style="fill:#f1f5f9;stroke:#64748b;stroke-width:1;rx:4"/>
+      <text x="1175" y="887" style="font-size:11px;font-weight:bold;fill:#334155;text-anchor:middle">圖例</text>
+
+      <rect x="995" y="897" width="14" height="14" style="fill:#ede9fe;stroke:#7c3aed;stroke-width:1.5"/>
+      <text x="1014" y="909" style="font-size:11px;fill:#1f2937">Sonnet 4.6（主管 + cs_response，貴但會看全貌）</text>
+
+      <rect x="995" y="917" width="14" height="14" style="fill:#dbeafe;stroke:#0284c7;stroke-width:1.5"/>
+      <text x="1014" y="929" style="font-size:11px;fill:#1f2937">Haiku 4.5（執行者 + 評估，便宜 4 倍）</text>
+
+      <rect x="995" y="937" width="14" height="14" style="fill:#fef3c7;stroke:#a16207;stroke-width:1.5"/>
+      <text x="1014" y="949" style="font-size:11px;fill:#1f2937">純程式 / regex（不打 LLM）</text>
+
+      <rect x="995" y="957" width="14" height="14" style="fill:#fff7ed;stroke:#fb923c;stroke-width:1"/>
+      <text x="1014" y="969" style="font-size:11px;fill:#1f2937">State JSON 區塊（每輪可能被多個節點修改）</text>
+
+      <text x="995" y="987" style="font-size:10px;fill:#64748b;font-style:italic">虛線箭頭：節點與 State 的讀寫關係</text>
     </svg>
   </div>
-  <p style="font-size:12px;color:#6b7280;text-align:center;margin-top:8px;">
-    虛線代表「命中即跳過後續」、實線代表「正常往下走」
+  <p style="font-size:12px;color:#6b7280;margin-top:8px;">
+    左側顯示「訊息進來 → 5 階段處理 → 回應」的順序與分支；右側列出全部 State 區塊與每個欄位是由誰讀寫。
   </p>
 
   <h2 id="state">右側 State 除錯面板欄位對照</h2>
