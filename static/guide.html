@@ -188,32 +188,158 @@
   <div class="legend-row"><div class="bar" style="background:#dc2626"></div><div class="text"><strong>紅色 — 對話結束 (session_ended)</strong><small>工單已建立或對話結束，提示用戶按「新對話」重新開始。</small></div></div>
 
   <h2 id="flow">系統運作流程</h2>
-  <p>每一輪用戶訊息進來，系統會：</p>
+  <p>每一輪用戶訊息進來，依以下順序處理（前一步沒命中才會進到下一步）：</p>
   <ol>
-    <li><strong>特殊 phase 攔截</strong>：如果在等待工單確認、收 Email、選擇意圖等特殊階段，直接交給對應 handler 處理。</li>
-    <li><strong>Greeting 快速通道（regex）</strong>：純打招呼（regex 攔截）直接走 greeting，不勞煩 Sonnet 主管。</li>
-    <li><strong>主管決策（Sonnet）</strong>：看完整對話歷史 + intent_log + 系統狀態，輸出一個 action（共 10 種）。</li>
-    <li><strong>執行者派任務</strong>：根據主管 action 派給 FAQ 回應器 / KB 查詢 / 離題處理 / 建單流程 等。</li>
-    <li><strong>背景評估（Haiku）</strong>：把這輪對話的情緒、分類、是否解決等資訊寫回 State，供下一輪參考。</li>
+    <li>
+      <strong>① 特殊 phase 攔截</strong>：如果系統正在等待用戶回應特定階段（等待工單確認、等待 Email、等待用戶從多重意圖選一個、對話已結束），<strong>直接交給對應 handler 處理</strong>，不打主管。
+    </li>
+    <li>
+      <strong>② Greeting fast-path（regex）</strong>：用 regex 比對純招呼字串（你好／Hi／嗨／在嗎／hello 等整句），命中直接走 greeting handler 生問候語，<strong>不打 Sonnet 主管</strong>。<br>
+      <em style="color:#6b7280;font-size:13px;">※ 這是 v4 階段就加的省成本機制，由 regex 完成（不是 Haiku 粗判），目的：純問候不需要 Sonnet 思考。</em>
+    </li>
+    <li>
+      <strong>③ Sonnet 主管統一決策</strong>：上面兩關都沒攔下時，由 Sonnet 主管接手。它看「<strong>完整對話歷史 + intent_log + 系統狀態 + FAQ 清單 + KB 索引</strong>」，輸出一個 action（共 10 種）+ 該 action 需要的 payload（要用哪個 FAQ、哪些 KB 文章等）。
+    </li>
+    <li>
+      <strong>④ 執行者派任務</strong>：orchestrator 看主管的 action 派給對應節點：FAQ 回應器、cs_response（用 KB 生答案）、no_kb_handler（KB 沒命中時誠實告知）、off_topic（離題回應）、ticket_handler（建單流程）等。
+    </li>
+    <li>
+      <strong>⑤ 背景評估（Haiku）</strong>：對話結束後 Haiku 跑一次評估，把情緒、分類、是否確認解決等資訊寫回 State 供下輪參考。
+    </li>
   </ol>
   <div class="note">
     主管模式的核心優勢：每輪都看「全貌」做決策，避免歷史污染或邊界 case 處理不一致。
   </div>
 
   <h3>主管的 10 種 action</h3>
+  <p style="font-size:13px;color:#6b7280;">下表列出主管所有可選 action。實際各 action 的觸發頻率有差，例如 <code>greeting</code> 因為已被 fast-path 攔截，主管很少走到。</p>
   <table>
-    <tr><th>action</th><th>何時用</th></tr>
-    <tr><td><code>greeting</code></td><td>純打招呼</td></tr>
-    <tr><td><code>clarify</code></td><td>用戶訊息模糊，需澄清</td></tr>
-    <tr><td><code>answer_with_faq</code></td><td>命中 FAQ，用標準答案</td></tr>
-    <tr><td><code>answer_with_kb</code></td><td>FAQ 未命中但 KB 有相關文章</td></tr>
-    <tr><td><code>acknowledge_out_of_scope</code></td><td>不在 HiSKIO 業務範圍</td></tr>
-    <tr><td><code>acknowledge_uncertainty</code></td><td>主管不確定用戶想問什麼，誠實告知</td></tr>
-    <tr><td><code>suggest_ticket</code></td><td>建議建立工單</td></tr>
-    <tr><td><code>list_pending_intents</code></td><td>用戶用「下一個」這類指稱詞，列出待辦意圖</td></tr>
-    <tr><td><code>continue_intent</code></td><td>用戶在補充當前意圖細節</td></tr>
-    <tr><td><code>force_escalation</code></td><td>連續多次無法溝通，強制建單</td></tr>
+    <tr><th>action</th><th>何時用</th><th>備註</th></tr>
+    <tr><td><code>answer_with_faq</code></td><td>命中 FAQ，用標準答案</td><td>最常見</td></tr>
+    <tr><td><code>answer_with_kb</code></td><td>FAQ 未命中但 KB 有相關文章</td><td>常見</td></tr>
+    <tr><td><code>clarify</code></td><td>用戶訊息模糊，需澄清</td><td>常見</td></tr>
+    <tr><td><code>continue_intent</code></td><td>用戶在補充當前意圖細節</td><td>常見</td></tr>
+    <tr><td><code>list_pending_intents</code></td><td>用戶用「下一個」這類指稱詞，列出待辦意圖</td><td>多重意圖場景</td></tr>
+    <tr><td><code>acknowledge_out_of_scope</code></td><td>不在 HiSKIO 業務範圍</td><td>離題訊息</td></tr>
+    <tr><td><code>acknowledge_uncertainty</code></td><td>主管不確定用戶想問什麼，誠實告知</td><td>邊界 case</td></tr>
+    <tr><td><code>suggest_ticket</code></td><td>建議建立工單</td><td>需要人工介入時</td></tr>
+    <tr><td><code>force_escalation</code></td><td>連續多次無法溝通，強制建單</td><td>很少觸發</td></tr>
+    <tr><td><code>greeting</code></td><td>純打招呼</td><td>備案，多數情況被 ② fast-path 先攔</td></tr>
   </table>
+
+  <h3>架構圖</h3>
+  <p>整體訊息處理路徑：</p>
+  <div style="text-align:center; background:#fff; border:1px solid #e3e5ea; border-radius:8px; padding:16px; overflow-x:auto;">
+    <svg width="900" height="780" viewBox="0 0 900 780" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+        </marker>
+        <style>
+          .box { fill: #fff; stroke: #475569; stroke-width: 1.5; rx: 8; ry: 8; }
+          .box-input { fill: #dbeafe; stroke: #2563eb; }
+          .box-phase { fill: #fef3c7; stroke: #d97706; }
+          .box-fast { fill: #cffafe; stroke: #0891b2; }
+          .box-manager { fill: #ede9fe; stroke: #7c3aed; stroke-width: 2.5; }
+          .box-action { fill: #f3f4f6; stroke: #6b7280; }
+          .box-end { fill: #dcfce7; stroke: #16a34a; }
+          .label { font-family: -apple-system, sans-serif; font-size: 13px; fill: #1f2937; text-anchor: middle; }
+          .label-bold { font-weight: bold; }
+          .label-small { font-size: 11px; fill: #6b7280; }
+          .arrow { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+          .arrow-skip { stroke-dasharray: 4,3; }
+        </style>
+      </defs>
+
+      <!-- 用戶訊息 -->
+      <rect class="box box-input" x="350" y="20" width="200" height="50"/>
+      <text class="label label-bold" x="450" y="42">用戶訊息進來</text>
+      <text class="label label-small" x="450" y="58">POST /api/chat</text>
+
+      <!-- 1. Phase 攔截 -->
+      <line class="arrow" x1="450" y1="70" x2="450" y2="100"/>
+      <rect class="box box-phase" x="270" y="100" width="360" height="80"/>
+      <text class="label label-bold" x="450" y="122">① 特殊 phase 攔截</text>
+      <text class="label label-small" x="450" y="140">等待工單確認 / 等待 Email / 等待用戶選擇意圖 / 已結束</text>
+      <text class="label label-small" x="450" y="158">→ 命中：直接交給對應 handler</text>
+      <text class="label label-small" x="450" y="173">→ 沒命中：往下走</text>
+
+      <!-- 2. Greeting fast-path -->
+      <line class="arrow" x1="450" y1="180" x2="450" y2="210"/>
+      <rect class="box box-fast" x="270" y="210" width="360" height="70"/>
+      <text class="label label-bold" x="450" y="232">② Greeting fast-path（regex）</text>
+      <text class="label label-small" x="450" y="252">純招呼字串攔截：「你好/Hi/嗨/在嗎/hello」</text>
+      <text class="label label-small" x="450" y="268">→ 命中：直接走 greeting handler（不打 Sonnet）</text>
+
+      <!-- 3. Manager -->
+      <line class="arrow" x1="450" y1="280" x2="450" y2="310"/>
+      <rect class="box box-manager" x="220" y="310" width="460" height="100"/>
+      <text class="label label-bold" x="450" y="332" style="font-size:14px;fill:#7c3aed">③ Sonnet 主管統一決策</text>
+      <text class="label label-small" x="450" y="352">看：用戶訊息 + 完整對話歷史 + intent_log + 系統狀態 + FAQ list + KB 索引</text>
+      <text class="label label-small" x="450" y="370">輸出：action（10 選 1）+ payload（faq_id / kb_ids / 訊息等）</text>
+      <text class="label label-small" x="450" y="388">+ 偵測到的新意圖（含 role、in_scope）</text>
+      <text class="label label-small" x="450" y="402" style="fill:#7c3aed">含 prompt caching：固定部分快取省 90% input cost</text>
+
+      <!-- 4. Action 派發 -->
+      <line class="arrow" x1="450" y1="410" x2="450" y2="440"/>
+      <rect class="box" x="270" y="440" width="360" height="40" style="fill:#fff;stroke:#475569;"/>
+      <text class="label label-bold" x="450" y="465">④ Action Executor 派任務</text>
+
+      <!-- 執行者節點：分散展開 -->
+      <line class="arrow" x1="450" y1="480" x2="120" y2="520"/>
+      <line class="arrow" x1="450" y1="480" x2="305" y2="520"/>
+      <line class="arrow" x1="450" y1="480" x2="450" y2="520"/>
+      <line class="arrow" x1="450" y1="480" x2="595" y2="520"/>
+      <line class="arrow" x1="450" y1="480" x2="780" y2="520"/>
+
+      <!-- 5 個執行者 -->
+      <rect class="box box-action" x="40" y="520" width="160" height="55"/>
+      <text class="label label-bold" x="120" y="540">faq_responder</text>
+      <text class="label label-small" x="120" y="558">FAQ 標準答案</text>
+      <text class="label label-small" x="120" y="572" style="fill:#16a34a">綠框 (faq)</text>
+
+      <rect class="box box-action" x="225" y="520" width="160" height="55"/>
+      <text class="label label-bold" x="305" y="540">cs_response</text>
+      <text class="label label-small" x="305" y="558">用 KB 生 RAG 答案</text>
+      <text class="label label-small" x="305" y="572" style="fill:#2563eb">藍框 (rag)</text>
+
+      <rect class="box box-action" x="370" y="520" width="160" height="55"/>
+      <text class="label label-bold" x="450" y="540">no_kb_handler</text>
+      <text class="label label-small" x="450" y="558">承認不知道+建單</text>
+      <text class="label label-small" x="450" y="572" style="fill:#ec4899">粉紅框 (no_kb_match)</text>
+
+      <rect class="box box-action" x="515" y="520" width="160" height="55"/>
+      <text class="label label-bold" x="595" y="540">off_topic</text>
+      <text class="label label-small" x="595" y="558">離題回應</text>
+      <text class="label label-small" x="595" y="572" style="fill:#ea580c">橘框 (off_topic)</text>
+
+      <rect class="box box-action" x="700" y="520" width="160" height="55"/>
+      <text class="label label-bold" x="780" y="540">ticket_handler</text>
+      <text class="label label-small" x="780" y="558">建單流程</text>
+      <text class="label label-small" x="780" y="572" style="fill:#7c3aed">紫框 (ticket_flow)</text>
+
+      <!-- 5. Evaluator -->
+      <line class="arrow" x1="120" y1="575" x2="450" y2="615"/>
+      <line class="arrow" x1="305" y1="575" x2="450" y2="615"/>
+      <line class="arrow" x1="450" y1="575" x2="450" y2="615"/>
+      <line class="arrow" x1="595" y1="575" x2="450" y2="615"/>
+      <line class="arrow" x1="780" y1="575" x2="450" y2="615"/>
+
+      <rect class="box box-action" x="270" y="615" width="360" height="60" style="fill:#fef9c3;stroke:#ca8a04"/>
+      <text class="label label-bold" x="450" y="637">⑤ 背景評估 evaluator（Haiku）</text>
+      <text class="label label-small" x="450" y="655">寫回情緒、分類、解決確認，供下輪主管參考</text>
+      <text class="label label-small" x="450" y="670">同時更新 intent_log 中當前意圖的 status</text>
+
+      <!-- 結尾 -->
+      <line class="arrow" x1="450" y1="675" x2="450" y2="705"/>
+      <rect class="box box-end" x="350" y="705" width="200" height="50"/>
+      <text class="label label-bold" x="450" y="727">回應給用戶</text>
+      <text class="label label-small" x="450" y="743">含 ai_response + state</text>
+    </svg>
+  </div>
+  <p style="font-size:12px;color:#6b7280;text-align:center;margin-top:8px;">
+    虛線代表「命中即跳過後續」、實線代表「正常往下走」
+  </p>
 
   <h2 id="state">右側 State 除錯面板欄位對照</h2>
   <p>
