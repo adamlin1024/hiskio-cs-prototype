@@ -45,13 +45,15 @@
     color: var(--muted);
     margin-left: 12px;
   }
-  header button {
+  header button, header a {
     background: var(--panel);
     border: 1px solid var(--border);
     padding: 6px 12px;
     border-radius: 6px;
     cursor: pointer;
     font-size: 13px;
+    text-decoration: none;
+    color: #111;
   }
   main {
     flex: 1;
@@ -154,30 +156,147 @@
     font-size: 14px;
   }
   #input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ─── 右側 State 除錯面板（結構化中文化） ─── */
   #debug-pane {
     background: #1e293b;
     color: #e2e8f0;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 16px;
-    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-family: -apple-system, "Microsoft JhengHei", monospace;
     font-size: 12px;
     min-height: 0;
     min-width: 0;
   }
   #debug-pane h3 {
-    margin: 0 0 8px;
-    font-size: 12px;
+    margin: 0 0 12px;
+    font-size: 13px;
     color: #94a3b8;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
   }
-  #state-json {
+  .toggle-view {
+    background: #334155;
+    color: #e2e8f0;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    text-transform: none;
+  }
+  .state-section {
+    background: #0f172a;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .state-section .section-title {
+    color: #fbbf24;
+    font-weight: bold;
+    font-size: 12px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #334155;
+    padding-bottom: 4px;
+  }
+  .state-row {
+    display: flex;
+    align-items: flex-start;
+    margin: 4px 0;
+    line-height: 1.5;
+    position: relative;
+  }
+  .state-key {
+    color: #93c5fd;
+    flex-shrink: 0;
+    min-width: 90px;
+    margin-right: 8px;
+    cursor: help;
+    border-bottom: 1px dotted #475569;
+  }
+  .state-key:hover { color: #fff; border-bottom-color: #fff; }
+  .state-value {
+    color: #e2e8f0;
+    word-break: break-all;
+    flex: 1;
+  }
+  .state-value.true { color: #34d399; }
+  .state-value.false { color: #94a3b8; }
+  .state-value.null { color: #64748b; font-style: italic; }
+  .state-value.number { color: #fcd34d; }
+  /* tooltip 用原生 title 屬性 */
+
+  #state-json-raw {
     white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.4;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    display: none;
   }
-  /* 身分選擇 modal */
+
+  /* ─── 燈號說明 modal ─── */
+  #legend-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+  }
+  #legend-modal.open { display: flex; }
+  #legend-modal .card {
+    background: var(--panel);
+    width: 560px;
+    max-width: calc(100vw - 40px);
+    max-height: calc(100vh - 60px);
+    border-radius: 10px;
+    overflow-y: auto;
+    padding: 20px 24px;
+  }
+  #legend-modal h2 {
+    margin: 0 0 16px;
+    font-size: 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  #legend-modal .close {
+    background: none;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    color: var(--muted);
+  }
+  .legend-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .legend-swatch {
+    width: 4px;
+    height: 38px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .legend-text strong {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
+  .legend-text small {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  /* ─── 身分選擇 modal ─── */
   #identity-modal {
     position: fixed;
     inset: 0;
@@ -243,7 +362,9 @@
     <span class="badge" id="user-badge">尚未建立 session</span>
   </div>
   <div style="display:flex;gap:8px;">
-    <a href="/admin" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--panel);font-size:13px;text-decoration:none;color:#111;">後台</a>
+    <button onclick="$('legend-modal').classList.add('open')" title="顯示對話訊息顏色說明">🎨 燈號說明</button>
+    <a href="/docs/guide" target="_blank">產品說明</a>
+    <a href="/admin">後台</a>
     <button onclick="location.reload()">新對話</button>
   </div>
 </header>
@@ -257,21 +378,259 @@
     </div>
   </section>
   <aside id="debug-pane">
-    <h3>State 除錯</h3>
-    <div id="state-json">（尚未開始）</div>
+    <h3>
+      State 除錯
+      <button class="toggle-view" id="toggle-view-btn">切換 Raw JSON</button>
+    </h3>
+    <div id="state-structured">（尚未開始）</div>
+    <div id="state-json-raw"></div>
   </aside>
 </main>
 
-<script>
-let sessionId = null;
+<!-- 燈號說明 modal -->
+<div id="legend-modal" onclick="if(event.target.id==='legend-modal')this.classList.remove('open')">
+  <div class="card">
+    <h2>
+      對話訊息燈號說明
+      <button class="close" onclick="$('legend-modal').classList.remove('open')">×</button>
+    </h2>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 12px;">
+      AI 回應左側的色帶代表系統判斷的回應類型，用來追蹤對話走哪一條路徑。
+    </p>
+    <div id="legend-list"></div>
+  </div>
+</div>
 
+<script>
 const $ = (id) => document.getElementById(id);
 const messagesEl = $("messages");
 const inputEl = $("msg-input");
 const sendBtn = $("send-btn");
-const stateEl = $("state-json");
+const stateStructuredEl = $("state-structured");
+const stateRawEl = $("state-json-raw");
 const badgeEl = $("user-badge");
 
+let sessionId = null;
+let showRaw = false;
+
+// ─── 燈號定義（給 modal + tooltip 共用） ───
+const LEGEND = [
+  { type: "greeting",          color: "#38bdf8", label: "問候 (greeting)",          desc: "純打招呼（你好、Hi、在嗎）；turn_count 不增加。一個 session 累計 max_greeting_count 次後永久轉灰框。" },
+  { type: "greeting_blocked",  color: "#9ca3af", label: "問候已達上限 (greeting_blocked)", desc: "greeting 累計超過 max（預設 3 次）後的硬擋訊息，不再呼叫 LLM。" },
+  { type: "clarification",     color: "#eab308", label: "釐清 (clarification)",      desc: "用戶訊息模糊（亂碼、太籠統、無法判斷想問什麼），系統請用戶補充。連續 3 次強制建單。" },
+  { type: "off_topic",         color: "#ea580c", label: "離題 (off_topic)",         desc: "用戶問題不在 HiSKIO 業務範圍（食物、天氣、推薦商品等）。off_topic_count 會累加。" },
+  { type: "off_topic_blocked", color: "#9ca3af", label: "離題已達上限 (off_topic_blocked)", desc: "離題累計達上限後的硬擋訊息。" },
+  { type: "intent_selection",  color: "#4c1d95", label: "多重意圖選項 (intent_selection)", desc: "偵測到多個獨立問題，列選項請用戶選一個先處理。" },
+  { type: "faq",               color: "#16a34a", label: "FAQ 標準答案 (faq)",        desc: "命中 FAQ，AI 用核心步驟一字不漏照抄、潤飾開場結尾。" },
+  { type: "rag",               color: "#2563eb", label: "知識庫解答 (rag)",         desc: "FAQ 未命中、KB 有相關文章，由 Sonnet 根據 KB 內容生成回答。" },
+  { type: "no_kb_match",       color: "#ec4899", label: "知識庫無解 (no_kb_match)", desc: "KB 完全沒有相關文章，AI 誠實告知並建議建立工單。" },
+  { type: "ticket_flow",       color: "#7c3aed", label: "工單流程 (ticket_flow)",    desc: "建議建單／確認建單／收 Email／建單成功 等工單相關訊息。" },
+  { type: "force_escalation",  color: "#7c3aed", label: "強制建單 (force_escalation)", desc: "連續 3 次模糊／無法溝通，系統強制建單。" },
+  { type: "session_ended",     color: "#dc2626", label: "對話結束 (session_ended)",  desc: "工單已建立或對話結束，請按「新對話」重新開始。" },
+];
+
+// ─── State 欄位中文說明 ───
+const STATE_FIELD_DOC = {
+  // 頂層
+  session_id:    "對話 session 唯一 ID（UUID）",
+  created_at:    "session 建立時間（UTC ISO 8601）",
+  updated_at:    "最後更新時間",
+  phase:         "對話階段：對話中／等待用戶選擇意圖／等待工單確認／等待 Email／已結束",
+  turn_count:    "對話輪數（greeting 不計）",
+
+  // user_info
+  is_logged_in:  "是否登入會員",
+  user_id:       "會員 ID（mock_users.json 中的 user_id）",
+  user_email:    "會員 Email（建單時自動帶入）",
+  user_name:     "顯示用名稱",
+  purchase_history: "已購課程清單（mock 資料）",
+
+  // issue_context
+  category:      "AI 評估後的問題分類（技術問題／帳務退款／帳號登入／課程內容／課程操作／其他）",
+  sub_category:  "更細的子分類，如「無法觀看影片」",
+  summary:       "AI 生成的問題一句話摘要",
+  user_emotion:  "用戶情緒：中性／困惑／焦慮／不滿／憤怒",
+
+  // faq_context
+  matched_faq_id:    "命中的 FAQ ID（如 faq_001）",
+  match_confidence:  "命中信心度 0.0-1.0；≥0.7 才會走 FAQ",
+  answer_strategy:   "本輪採用的回答策略：faq_template／rag／no_kb_match",
+
+  // kb_context
+  indexed_articles:        "manager 挑選的 KB 文章 ID 清單",
+  articles_used_in_response: "實際塞進 cs_response prompt 的文章",
+
+  // service_limits
+  max_turns_per_session:    "單一 session 最多輪數（預設 20）",
+  max_off_topic_count:      "離題容忍上限（預設 3）",
+  max_low_confidence_count: "低信心容忍上限（預設 3）",
+  max_unresolved_count:     "未解決容忍上限（預設 3）",
+  off_topic_count:          "已累計離題次數",
+  low_confidence_count:     "已累計 AI 低信心回答次數",
+  unresolved_count:         "已累計用戶不滿意次數",
+  limit_reached:            "是否已達服務上限（觸發後建議建單）",
+  limit_reached_reason:     "達到上限的原因：turn_max／off_topic_max／low_confidence_max／unresolved_max",
+
+  // ticket_state
+  ticket_suggested:    "AI 是否已建議建單",
+  user_decision:       "用戶對建單的回應：accepted／declined／null",
+  collecting_email:    "是否正在向訪客收 Email",
+  email_attempts:      "Email 格式錯誤次數（達 3 次放棄建單）",
+  ticket_id:           "已建立的工單編號",
+  ticket_created_at:   "工單建立時間",
+
+  // intent_state
+  input_classification:      "本輪 manager 選的 action（greeting/clarify/answer_with_faq/...）",
+  consecutive_unclear_count: "連續模糊計數（達 max 強制建單）",
+  max_unclear_count:         "模糊容忍上限（預設 2，第 3 次強制建單）",
+  greeting_count:            "session 累計 greeting 次數",
+  max_greeting_count:        "greeting 上限（超過轉灰框，預設 3）",
+  intent_clarity:            "本輪意圖明確度：simple／ambiguous_subordinate／parallel_multiple",
+  awaiting_selection:        "是否在等用戶從多重意圖選一個",
+  current_intent:            "目前正在跟用戶討論的意圖文字",
+  intent_log:                "整個 session 偵測到的所有意圖（永不刪除，只更新 status）",
+
+  // intent_log 內欄位
+  text:        "意圖文字",
+  status:      "意圖狀態：pending（待辦）／in_progress（討論中）／answered（已回但未確認）／confirmed_resolved（用戶確認解決）",
+  in_scope:    "是否屬於 HiSKIO 業務範圍",
+  role:        "意圖角色：primary（主訴）／secondary（順便問）／context（純脈絡不算待辦）",
+  first_turn:  "首次出現在第幾輪",
+
+  // escalation_signals
+  user_explicitly_requested_human: "用戶是否明確要求人工",
+  ai_low_confidence_count:         "AI 低信心累計次數",
+  issue_complexity_high:           "問題是否被判定為複雜",
+  user_anger_threshold_hit:        "用戶情緒是否達憤怒閾值",
+  no_kb_match:                     "KB 完全沒命中（觸發 no_kb_handler）",
+
+  chat_history: "完整對話訊息陣列（含 timestamp 與 response_type）",
+};
+
+// ─── 渲染燈號 modal ───
+function renderLegend() {
+  const list = $("legend-list");
+  list.innerHTML = "";
+  LEGEND.forEach((l) => {
+    const item = document.createElement("div");
+    item.className = "legend-item";
+    item.innerHTML = `
+      <div class="legend-swatch" style="background:${l.color}"></div>
+      <div class="legend-text">
+        <strong>${l.label}</strong>
+        <small>${l.desc}</small>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+}
+renderLegend();
+
+// ─── 渲染結構化 State ───
+function renderStateStructured(state) {
+  const sections = [
+    { key: "_meta",              title: "Session 基本資料",  fields: ["session_id", "created_at", "updated_at", "phase", "turn_count"] },
+    { key: "user_info",          title: "用戶資料" },
+    { key: "intent_state",       title: "意圖追蹤（v6 主管模式核心）" },
+    { key: "issue_context",      title: "問題分類（evaluator 寫入）" },
+    { key: "faq_context",        title: "FAQ 處理狀態" },
+    { key: "kb_context",         title: "KB 知識庫處理狀態" },
+    { key: "service_limits",     title: "服務上限與計數器" },
+    { key: "ticket_state",       title: "工單狀態" },
+    { key: "escalation_signals", title: "升級信號（v6 大多由 manager 接管）" },
+  ];
+
+  let html = "";
+  for (const sec of sections) {
+    html += `<div class="state-section"><div class="section-title">${sec.title}</div>`;
+    if (sec.key === "_meta") {
+      for (const f of sec.fields) {
+        html += renderRow(f, state[f]);
+      }
+    } else {
+      const obj = state[sec.key] || {};
+      for (const k of Object.keys(obj)) {
+        html += renderRow(k, obj[k]);
+      }
+    }
+    html += `</div>`;
+  }
+
+  // chat_history 太長另開一段，只顯示筆數
+  html += `<div class="state-section"><div class="section-title">對話歷史</div>`;
+  html += renderRow("chat_history", `${(state.chat_history || []).length} 則訊息（完整內容於左側對話區）`);
+  html += `</div>`;
+
+  stateStructuredEl.innerHTML = html;
+}
+
+function renderRow(key, value) {
+  const doc = STATE_FIELD_DOC[key] || "";
+  const titleAttr = doc ? `title="${escapeAttr(doc)}"` : "";
+  const valueHtml = renderValue(value);
+  return `
+    <div class="state-row">
+      <span class="state-key" ${titleAttr}>${escapeHtml(key)}</span>
+      <span class="state-value">${valueHtml}</span>
+    </div>
+  `;
+}
+
+function renderValue(v) {
+  if (v === null || v === undefined) return `<span class="null">null</span>`;
+  if (typeof v === "boolean") return `<span class="${v ? "true" : "false"}">${v}</span>`;
+  if (typeof v === "number") return `<span class="number">${v}</span>`;
+  if (Array.isArray(v)) {
+    if (v.length === 0) return "[]";
+    if (v.every((x) => typeof x === "string" || typeof x === "number")) {
+      return `[${v.map(escapeHtml).join(", ")}]`;
+    }
+    // intent_log 之類的物件陣列
+    return `<details><summary>${v.length} 項（點開展開）</summary>${v.map((x, i) => `<div style="margin:4px 0 4px 12px;padding:4px;background:#1e293b;border-radius:4px;">[${i}] ${formatObject(x)}</div>`).join("")}</details>`;
+  }
+  if (typeof v === "object") {
+    return formatObject(v);
+  }
+  return escapeHtml(String(v));
+}
+
+function formatObject(obj) {
+  return Object.entries(obj)
+    .map(([k, val]) => {
+      const doc = STATE_FIELD_DOC[k] || "";
+      const titleAttr = doc ? `title="${escapeAttr(doc)}"` : "";
+      return `<div style="margin:2px 0;"><span class="state-key" ${titleAttr} style="min-width:auto">${escapeHtml(k)}</span>: <span class="state-value">${renderValue(val)}</span></div>`;
+    })
+    .join("");
+}
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+function escapeAttr(s) {
+  return escapeHtml(s).replace(/\n/g, " ");
+}
+
+function renderState(state) {
+  renderStateStructured(state);
+  stateRawEl.textContent = JSON.stringify(state, null, 2);
+}
+
+// 切換 raw JSON / 結構化視圖
+$("toggle-view-btn").onclick = () => {
+  showRaw = !showRaw;
+  stateStructuredEl.style.display = showRaw ? "none" : "block";
+  stateRawEl.style.display = showRaw ? "block" : "none";
+  $("toggle-view-btn").textContent = showRaw ? "切換結構化檢視" : "切換 Raw JSON";
+};
+
+// ─── 身分選擇 / 對話流程（沿用） ───
 async function loadMockUsers() {
   const r = await fetch("/api/mock_users");
   const data = await r.json();
@@ -332,16 +691,18 @@ function appendMessage(content, role, type) {
   if (type) {
     const meta = document.createElement("span");
     meta.className = "meta";
+    // 顯示 type + tooltip 顯示中文說明
+    const legend = LEGEND.find((l) => l.type === type);
     meta.textContent = type;
+    if (legend) {
+      meta.title = legend.label + "\n" + legend.desc;
+      meta.style.cursor = "help";
+    }
     div.appendChild(meta);
   }
   messagesEl.appendChild(div);
   messagesEl.scrollTop = messagesEl.scrollHeight;
   return div;
-}
-
-function renderState(state) {
-  stateEl.textContent = JSON.stringify(state, null, 2);
 }
 
 async function send() {

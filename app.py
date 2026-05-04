@@ -138,6 +138,11 @@ def admin_page():
     return FileResponse(STATIC_DIR / "admin.html")
 
 
+@app.get("/docs/guide")
+def guide_page():
+    return FileResponse(STATIC_DIR / "guide.html")
+
+
 # ────────────────────────────────────────────────────────────────────
 # 後台 API（Phase 5）
 # ────────────────────────────────────────────────────────────────────

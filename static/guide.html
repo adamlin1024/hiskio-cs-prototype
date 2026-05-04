@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HiSKIO AI 客服 — 產品說明</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif;
+    background: #f5f6f8;
+    color: #1f2937;
+    line-height: 1.7;
+  }
+  .container {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 32px 24px 80px;
+  }
+  header {
+    background: #fff;
+    border-bottom: 1px solid #e3e5ea;
+    padding: 14px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header h1 { margin: 0; font-size: 18px; }
+  header a {
+    color: #2563eb;
+    text-decoration: none;
+    font-size: 14px;
+  }
+  h2 {
+    margin-top: 36px;
+    padding-top: 16px;
+    border-top: 2px solid #e3e5ea;
+    font-size: 22px;
+  }
+  h3 {
+    margin-top: 28px;
+    font-size: 17px;
+    color: #111;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+    background: #fff;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  th { background: #f3f4f6; font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  code {
+    background: #f3f4f6;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #be185d;
+  }
+  .swatch {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  .legend-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 12px;
+    background: #fff;
+    border-radius: 6px;
+    margin-bottom: 8px;
+  }
+  .legend-row .bar {
+    width: 5px;
+    height: 50px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .legend-row .text strong { display: block; margin-bottom: 4px; }
+  .legend-row .text small { color: #6b7280; }
+  .note {
+    background: #fef3c7;
+    border-left: 4px solid #d97706;
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .info {
+    background: #dbeafe;
+    border-left: 4px solid #2563eb;
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  ul, ol { padding-left: 24px; }
+  li { margin: 6px 0; }
+  .toc {
+    background: #fff;
+    border: 1px solid #e3e5ea;
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+  }
+  .toc h3 { margin: 0 0 8px; font-size: 14px; color: #6b7280; text-transform: uppercase; }
+  .toc ul { margin: 0; padding-left: 20px; }
+  .toc a { color: #2563eb; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>HiSKIO AI 客服 — 產品說明</h1>
+  <div>
+    <a href="/">← 回對話介面</a>
+    &nbsp;&nbsp;
+    <a href="/admin">後台</a>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="toc">
+    <h3>目錄</h3>
+    <ul>
+      <li><a href="#overview">這是什麼</a></li>
+      <li><a href="#legend">對話訊息燈號說明</a></li>
+      <li><a href="#flow">系統運作流程</a></li>
+      <li><a href="#state">右側 State 除錯面板欄位對照</a></li>
+      <li><a href="#limits">服務上限機制</a></li>
+      <li><a href="#ticket">工單流程</a></li>
+      <li><a href="#admin">後台介面</a></li>
+      <li><a href="#operate">內部操作建議</a></li>
+    </ul>
+  </div>
+
+  <h2 id="overview">這是什麼</h2>
+  <p>
+    HiSKIO AI 客服系統是一個三段式對話客服雛形：
+    先由 <strong>主管（Sonnet）</strong> 看完整對話脈絡決定要做什麼動作，再分派給對應的執行者節點（FAQ 回應、KB 查詢、離題擋下、建立工單等）回應用戶。
+  </p>
+  <p>
+    最終目標：用戶能透過對話得到 FAQ 標準答案、KB 知識庫解答；遇到複雜或非業務範圍的問題會自動建議建立工單由真人客服處理。
+  </p>
+  <div class="info">
+    內部操作者主要看左側對話、右側即時狀態（State 除錯面板），可隨時了解 AI 為什麼這樣回應、走哪一條路徑。
+  </div>
+
+  <h2 id="legend">對話訊息燈號說明</h2>
+  <p>每則 AI 回應左側的<strong>色帶</strong>代表系統判斷的回應類型，可從顏色快速看出是走哪一條路徑：</p>
+
+  <div class="legend-row"><div class="bar" style="background:#38bdf8;border-style:dashed;border-left:1px dashed #38bdf8"></div><div class="text"><strong>淺藍虛線 — 問候 (greeting)</strong><small>純打招呼（你好、Hi、在嗎）。turn_count 不增加。一個 session 累計 max_greeting_count 次（預設 3）後永久轉灰框。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#9ca3af"></div><div class="text"><strong>灰色 — 問候已達上限 (greeting_blocked)</strong><small>greeting 累計超過 3 次後的硬擋訊息，提示用戶有問題就直接描述、否則請結束對話。不再呼叫 LLM。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#eab308"></div><div class="text"><strong>橘黃 — 釐清 (clarification)</strong><small>用戶訊息模糊（亂碼、太籠統、無法判斷想問什麼），系統請用戶補充。連續 3 次強制建單。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#ea580c"></div><div class="text"><strong>橘色 — 離題 (off_topic)</strong><small>用戶問題不在 HiSKIO 業務範圍（食物、天氣、推薦商品、質疑系統等）。off_topic_count 會累加，達上限後觸發建單建議。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#9ca3af"></div><div class="text"><strong>灰色（小字）— 離題已達上限 (off_topic_blocked)</strong><small>離題累計達上限後的硬擋訊息：「對話僅處理 HiSKIO 服務相關問題」。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#4c1d95;width:6px"></div><div class="text"><strong>深紫色 — 多重意圖選項 (intent_selection)</strong><small>偵測到多個獨立問題，列選項請用戶選一個先處理。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#16a34a"></div><div class="text"><strong>綠色 — FAQ 標準答案 (faq)</strong><small>命中 FAQ，AI 用核心步驟一字不漏照抄、潤飾開場結尾。穩定、不會幻覺。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#2563eb"></div><div class="text"><strong>藍色 — 知識庫解答 (rag)</strong><small>FAQ 未命中、KB 有相關文章，由 Sonnet 根據 KB 內容生成回答。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#ec4899"></div><div class="text"><strong>粉紅色 — 知識庫無解 (no_kb_match)</strong><small>KB 完全沒有相關文章，AI 誠實告知並建議建立工單。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#7c3aed"></div><div class="text"><strong>紫色 — 工單流程 (ticket_flow / force_escalation)</strong><small>建議建單／確認建單／收 Email／建單成功 等工單相關訊息。force_escalation 是「連續 3 次無法溝通」的強制建單。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#dc2626"></div><div class="text"><strong>紅色 — 對話結束 (session_ended)</strong><small>工單已建立或對話結束，提示用戶按「新對話」重新開始。</small></div></div>
+
+  <h2 id="flow">系統運作流程</h2>
+  <p>每一輪用戶訊息進來，系統會：</p>
+  <ol>
+    <li><strong>特殊 phase 攔截</strong>：如果在等待工單確認、收 Email、選擇意圖等特殊階段，直接交給對應 handler 處理。</li>
+    <li><strong>Greeting 快速通道（regex）</strong>：純打招呼（regex 攔截）直接走 greeting，不勞煩 Sonnet 主管。</li>
+    <li><strong>主管決策（Sonnet）</strong>：看完整對話歷史 + intent_log + 系統狀態，輸出一個 action（共 10 種）。</li>
+    <li><strong>執行者派任務</strong>：根據主管 action 派給 FAQ 回應器 / KB 查詢 / 離題處理 / 建單流程 等。</li>
+    <li><strong>背景評估（Haiku）</strong>：把這輪對話的情緒、分類、是否解決等資訊寫回 State，供下一輪參考。</li>
+  </ol>
+  <div class="note">
+    主管模式的核心優勢：每輪都看「全貌」做決策，避免歷史污染或邊界 case 處理不一致。
+  </div>
+
+  <h3>主管的 10 種 action</h3>
+  <table>
+    <tr><th>action</th><th>何時用</th></tr>
+    <tr><td><code>greeting</code></td><td>純打招呼</td></tr>
+    <tr><td><code>clarify</code></td><td>用戶訊息模糊，需澄清</td></tr>
+    <tr><td><code>answer_with_faq</code></td><td>命中 FAQ，用標準答案</td></tr>
+    <tr><td><code>answer_with_kb</code></td><td>FAQ 未命中但 KB 有相關文章</td></tr>
+    <tr><td><code>acknowledge_out_of_scope</code></td><td>不在 HiSKIO 業務範圍</td></tr>
+    <tr><td><code>acknowledge_uncertainty</code></td><td>主管不確定用戶想問什麼，誠實告知</td></tr>
+    <tr><td><code>suggest_ticket</code></td><td>建議建立工單</td></tr>
+    <tr><td><code>list_pending_intents</code></td><td>用戶用「下一個」這類指稱詞，列出待辦意圖</td></tr>
+    <tr><td><code>continue_intent</code></td><td>用戶在補充當前意圖細節</td></tr>
+    <tr><td><code>force_escalation</code></td><td>連續多次無法溝通，強制建單</td></tr>
+  </table>
+
+  <h2 id="state">右側 State 除錯面板欄位對照</h2>
+  <p>
+    State 除錯面板有「結構化檢視」（預設）與「Raw JSON」兩種模式可切換。
+    結構化檢視中的每個欄位名稱<strong>滑鼠移上去會顯示中文說明</strong>。
+    以下為主要欄位完整對照：
+  </p>
+
+  <h3>Session 基本資料</h3>
+  <table>
+    <tr><th>欄位</th><th>說明</th></tr>
+    <tr><td><code>session_id</code></td><td>對話 session 唯一 ID（UUID）</td></tr>
+    <tr><td><code>created_at / updated_at</code></td><td>建立 / 最後更新時間（UTC）</td></tr>
+    <tr><td><code>phase</code></td><td>對話階段：對話中／等待用戶選擇意圖／等待工單確認／等待 Email／已結束</td></tr>
+    <tr><td><code>turn_count</code></td><td>對話輪數（greeting 不計）</td></tr>
+  </table>
+
+  <h3>用戶資料 (user_info)</h3>
+  <table>
+    <tr><th>欄位</th><th>說明</th></tr>
+    <tr><td><code>is_logged_in</code></td><td>是否登入會員</td></tr>
+    <tr><td><code>user_id / user_name / user_email</code></td><td>會員資料（建單時自動帶 email）</td></tr>
+    <tr><td><code>purchase_history</code></td><td>已購課程清單（mock 資料）</td></tr>
+  </table>
+
+  <h3>意圖追蹤 (intent_state) ⭐</h3>
+  <p>v6 主管模式的核心：所有偵測到的意圖都會記在 <code>intent_log</code>，永不刪除、只更新狀態。</p>
+  <table>
+    <tr><th>欄位</th><th>說明</th></tr>
+    <tr><td><code>input_classification</code></td><td>本輪 manager 選的 action 名稱</td></tr>
+    <tr><td><code>consecutive_unclear_count</code></td><td>連續模糊計數，達 3 次強制建單</td></tr>
+    <tr><td><code>greeting_count</code></td><td>session 累計 greeting 次數，超過 max（3）轉灰框</td></tr>
+    <tr><td><code>current_intent</code></td><td>目前正在跟用戶討論的意圖文字</td></tr>
+    <tr><td><code>awaiting_selection</code></td><td>是否在等用戶從多重意圖選一個</td></tr>
+    <tr><td><code>intent_log</code></td><td>session 全部偵測到的意圖陣列（每項含 text / status / role / in_scope / first_turn）</td></tr>
+  </table>
+
+  <h3>intent_log 內每項的欄位</h3>
+  <table>
+    <tr><th>欄位</th><th>說明</th></tr>
+    <tr><td><code>text</code></td><td>意圖文字</td></tr>
+    <tr><td><code>status</code></td><td><strong>pending</strong>（待辦）／<strong>in_progress</strong>（討論中）／<strong>answered</strong>（已回但未確認解決）／<strong>confirmed_resolved</strong>（用戶明確說解決了）</td></tr>
+    <tr><td><code>role</code></td><td><strong>primary</strong>（主訴）／<strong>secondary</strong>（順便問）／<strong>context</strong>（純脈絡，不算待辦）</td></tr>
+    <tr><td><code>in_scope</code></td><td>是否屬於 HiSKIO 業務範圍（true / false）</td></tr>
+    <tr><td><code>first_turn</code></td><td>首次出現在第幾輪</td></tr>
+  </table>
+
+  <h3>問題分類 (issue_context) ・ 由 evaluator 自動寫入</h3>
+  <table>
+    <tr><th>欄位</th><th>說明</th></tr>
+    <tr><td><code>category</code></td><td>技術問題／帳務退款／帳號登入／課程內容／課程操作／其他</td></tr>
+    <tr><td><code>sub_category</code></td><td>更細的子分類，如「無法觀看影片」</td></tr>
+    <tr><td><code>summary</code></td><td>AI 生成的問題一句話摘要</td></tr>
+    <tr><td><code>user_emotion</code></td><td>中性／困惑／焦慮／不滿／憤怒</td></tr>
+  </table>
+
+  <h3>FAQ / KB 處理狀態</h3>
+  <table>
+    <tr><th>欄位</th><th>說明</th></tr>
+    <tr><td><code>faq_context.matched_faq_id</code></td><td>命中的 FAQ ID</td></tr>
+    <tr><td><code>faq_context.match_confidence</code></td><td>命中信心度 0.0-1.0；≥0.7 才會走 FAQ</td></tr>
+    <tr><td><code>faq_context.answer_strategy</code></td><td>本輪採用的回答策略：faq_template／rag／no_kb_match</td></tr>
+    <tr><td><code>kb_context.indexed_articles</code></td><td>manager 挑選的 KB 文章 ID 清單</td></tr>
+    <tr><td><code>kb_context.articles_used_in_response</code></td><td>實際塞進 prompt 的文章 ID</td></tr>
+  </table>
+
+  <h2 id="limits">服務上限機制 (service_limits)</h2>
+  <p>系統有四個累計計數器，達到上限會自動建議建單：</p>
+  <table>
+    <tr><th>計數器</th><th>上限</th><th>觸發條件</th></tr>
+    <tr><td><code>off_topic_count</code></td><td>3</td><td>用戶連續 3 次離題</td></tr>
+    <tr><td><code>low_confidence_count</code></td><td>3</td><td>AI 對自己答案的信心 &lt; 0.4 累計 3 次</td></tr>
+    <tr><td><code>unresolved_count</code></td><td>3</td><td>用戶對 AI 回答不滿意累計 3 次</td></tr>
+    <tr><td><code>turn_count</code></td><td>20</td><td>整個 session 對話超過 20 輪</td></tr>
+  </table>
+  <p>
+    任一條件觸發後 <code>limit_reached</code> 變 true，<code>limit_reached_reason</code> 會記錄是哪個原因，
+    下一輪用戶說話時系統主動跳出建議建單訊息。
+  </p>
+  <div class="note">
+    用戶若拒絕建單（回「不用」），<code>user_decision</code> 變 declined，系統不會再重複建議建單；
+    繼續離題的話會走灰框 off_topic_blocked。
+  </div>
+
+  <h2 id="ticket">工單流程</h2>
+  <ol>
+    <li>系統建議建單（紫框 ticket_flow）</li>
+    <li>用戶回「好」或「不用」（系統用 Haiku 判斷）
+      <ul>
+        <li><strong>好</strong> → 進階段 3</li>
+        <li><strong>不用</strong> → 結束建單流程，回對話模式（不再重複建議）</li>
+        <li><strong>看不出意圖</strong> → 退回對話模式，重新交給主管處理</li>
+      </ul>
+    </li>
+    <li>檢查身分
+      <ul>
+        <li>會員 → 直接用 user_info.user_email 建單</li>
+        <li>訪客 → 進階段 4 收 Email</li>
+      </ul>
+    </li>
+    <li>收集 Email（最多重試 3 次格式錯誤後放棄）</li>
+    <li>Sonnet 生成工單摘要 → 寫入 SQLite tickets 表 → 回工單編號</li>
+    <li><code>phase = 已結束</code>，後續輸入固定回「請按新對話按鈕」</li>
+  </ol>
+
+  <h2 id="admin">後台介面</h2>
+  <p><a href="/admin" target="_blank">/admin</a> 提供：</p>
+  <ul>
+    <li>工單列表（依時間倒序）</li>
+    <li>篩選 Open / In Progress / Closed</li>
+    <li>單筆工單可標記狀態（標記 Open / 處理中 / 結案）</li>
+    <li>查看完整對話 modal：含 AI 摘要 + AI 嘗試過什麼 + 完整 chat_history（每則含 response_type）</li>
+  </ul>
+
+  <h2 id="operate">內部操作建議</h2>
+  <h3>觀察 AI 行為</h3>
+  <ul>
+    <li>看左側對話的<strong>色帶</strong>，可以快速判斷 AI 走的是哪一條路徑</li>
+    <li>對話下方 <code>response_type</code> 標籤<strong>滑鼠移過去</strong>會顯示中文說明</li>
+    <li>右側 State 面板可即時看到所有狀態變化（特別注意 <code>intent_log</code> 與 <code>service_limits</code>）</li>
+  </ul>
+
+  <h3>測試常見場景</h3>
+  <table>
+    <tr><th>想測什麼</th><th>輸入範例</th><th>預期顏色</th></tr>
+    <tr><td>FAQ 命中</td><td>「我影片不能看」</td><td>綠色 faq</td></tr>
+    <tr><td>RAG 走查</td><td>「我影片有畫面但沒聲音」</td><td>藍色 rag</td></tr>
+    <tr><td>多重意圖</td><td>「我有發票跟付款問題」</td><td>深紫 intent_selection</td></tr>
+    <tr><td>主從關係</td><td>「我發票要先解決，順便看一下退費」</td><td>綠／藍（直接處理發票）</td></tr>
+    <tr><td>離題</td><td>「你今天午餐吃什麼」</td><td>橘色 off_topic</td></tr>
+    <tr><td>系統不知道</td><td>「你們公司有附設停車場嗎」</td><td>粉紅 no_kb_match + 建單按鈕</td></tr>
+    <tr><td>純問候</td><td>「你好」</td><td>淺藍虛線 greeting</td></tr>
+    <tr><td>模糊訊息連發</td><td>「我有問題」、「不行」、「dlsjfk」</td><td>第 3 次 → 紫色 force_escalation</td></tr>
+  </table>
+
+  <h3>有問題時怎麼 debug</h3>
+  <ol>
+    <li>看右側 State 面板：<code>intent_state.input_classification</code> 顯示主管選了哪個 action</li>
+    <li>看 <code>intent_log</code>：所有偵測到的意圖、status、role 都在這裡，可看出系統「以為」用戶要做什麼</li>
+    <li>看 <code>service_limits</code>：是不是已達某個上限導致系統行為不一樣</li>
+    <li>看 <code>ticket_state</code>：用戶是否已拒絕過建單（declined）影響後續邏輯</li>
+  </ol>
+
+  <h3>常見「為什麼 AI 這樣回」的原因</h3>
+  <table>
+    <tr><th>觀察到的行為</th><th>可能原因</th></tr>
+    <tr><td>連續被問「我聽不懂」</td><td>主管判 acknowledge_uncertainty 或 clarify。可能用戶訊息太籠統，或 chat_history 有歷次 clarify 紀錄拖累判斷。</td></tr>
+    <tr><td>突然冒出「建立工單」按鈕</td><td>主管選了 suggest_ticket，或服務上限觸發，或 cs_response 加了 [SUGGEST_TICKET] 標記。</td></tr>
+    <tr><td>第 4 次「你好」變成灰框</td><td>greeting_count 超過 max（預設 3）後永久轉灰框，不再用 LLM 生問候。</td></tr>
+    <tr><td>用戶離題系統不擋</td><td>主管判定屬於 in_scope 範圍（例如帶有「課程」「影片」關鍵詞）。可調主管 prompt 範圍定義。</td></tr>
+    <tr><td>「下一個問題呢」沒對應到舊意圖</td><td>主管沒解析到指稱詞，可能 intent_log 已經沒 pending 項或 status 已經 confirmed_resolved。</td></tr>
+  </table>
+
+  <h3>修改 KB / FAQ</h3>
+  <ul>
+    <li>FAQ：直接編輯 <code>data/faq.json</code>，重啟 server 即生效</li>
+    <li>KB：把 .md 放到 <code>data/kb/</code> → 跑 <code>python scripts/build_kb_index.py</code> → 重啟 server</li>
+  </ul>
+
+  <p style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #e3e5ea; color: #6b7280; font-size: 12px;">
+    雛形版本 v6.2（主管模式 + Anthropic Prompt Caching）。
+    完整技術規格見 <code>data/hiskio_cs_prototype_spec_v6.md</code>。
+  </p>
+
+</div>
+
+</body>
+</html>
