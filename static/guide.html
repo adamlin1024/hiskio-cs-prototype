@@ -121,6 +121,69 @@
   .toc ul { margin: 0; padding-left: 20px; }
   .toc a { color: #2563eb; text-decoration: none; }
   .toc a:hover { text-decoration: underline; }
+
+  /* 版本切換 tabs */
+  .vtabs {
+    display: flex;
+    gap: 4px;
+    margin: 16px 0 0;
+    border-bottom: 2px solid #e3e5ea;
+  }
+  .vtabs button {
+    background: transparent;
+    border: none;
+    padding: 10px 18px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: #6b7280;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: color .15s, border-color .15s;
+  }
+  .vtabs button:hover { color: #1f2937; }
+  .vtabs button.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+  }
+  .vtabs button .badge {
+    background: #2563eb;
+    color: #fff;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    margin-left: 6px;
+  }
+  .vpanel { display: none; padding-top: 12px; }
+  .vpanel.active { display: block; }
+  .arch-box {
+    background: #0f172a;
+    color: #cbd5e1;
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.55;
+    overflow-x: auto;
+    white-space: pre;
+    margin: 12px 0;
+  }
+  .arch-box .lab { color: #60a5fa; }
+  .arch-box .lab2 { color: #fbbf24; }
+  .arch-box .lab3 { color: #34d399; }
+  .arch-box .lab4 { color: #f472b6; }
+  .cost-box {
+    display: inline-block;
+    background: #ecfdf5;
+    border: 1px solid #6ee7b7;
+    color: #065f46;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-weight: 600;
+    margin: 4px 8px 4px 0;
+  }
+  .cost-box.bad { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+  .cost-box.neutral { background: #f3f4f6; border-color: #d1d5db; color: #374151; }
 </style>
 </head>
 <body>
@@ -139,15 +202,27 @@
   <div class="toc">
     <h3>目錄</h3>
     <ul>
-      <li><a href="#overview">這是什麼</a></li>
-      <li><a href="#legend">對話訊息燈號說明</a></li>
-      <li><a href="#flow">系統運作流程</a></li>
-      <li><a href="#state">右側 State 除錯面板欄位對照</a></li>
-      <li><a href="#limits">服務上限機制</a></li>
-      <li><a href="#ticket">工單流程</a></li>
-      <li><a href="#admin">後台介面</a></li>
-      <li><a href="#operate">內部操作建議</a></li>
-      <li><a href="#versions">版本演化（v5 / v6 / v7）</a></li>
+      <li><strong>共用基礎</strong>
+        <ul>
+          <li><a href="#overview">這是什麼</a></li>
+          <li><a href="#legend">對話訊息燈號</a></li>
+          <li><a href="#actions">主管 Action 說明</a></li>
+          <li><a href="#state">State 除錯欄位對照</a></li>
+          <li><a href="#limits">服務上限機制</a></li>
+          <li><a href="#ticket">工單流程</a></li>
+        </ul>
+      </li>
+      <li><strong>版本切換</strong>
+        <ul>
+          <li><a href="#flow">系統運作流程（v5 / v6 / v7）</a></li>
+        </ul>
+      </li>
+      <li><strong>運維</strong>
+        <ul>
+          <li><a href="#admin">後台介面</a></li>
+          <li><a href="#operate">內部操作建議</a></li>
+        </ul>
+      </li>
     </ul>
   </div>
 
@@ -190,43 +265,22 @@
 
   <div class="legend-row"><div class="bar" style="background:#dc2626"></div><div class="text"><strong>紅色 — 對話結束 (session_ended)</strong><small>工單已建立或對話結束，提示用戶按「新對話」重新開始。</small></div></div>
 
-  <h2 id="flow">系統運作流程</h2>
-  <p>每一輪用戶訊息進來，依以下順序處理（前一步沒命中才會進到下一步）。<strong>每個步驟有標明用什麼模型（Sonnet/Haiku）或純程式（regex）</strong>：</p>
-  <ol>
-    <li>
-      <strong>① 特殊 phase 攔截</strong> <span style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:12px;">純程式</span><br>
-      檢查 <code>state.phase</code>：如果在等待工單確認、等待 Email、等待用戶從多重意圖選一個、對話已結束，<strong>直接交給對應 handler 處理</strong>。不呼叫 LLM。
-    </li>
-    <li>
-      <strong>② Greeting fast-path</strong> <span style="background:#cffafe;padding:2px 8px;border-radius:4px;font-size:12px;">regex 純程式</span><br>
-      regex 比對「整句剛好是純招呼字串」（你好／Hi／嗨／在嗎／hello）。<br>
-      <strong>命中</strong> → 跳過 Sonnet 主管，直接由 Haiku 生問候語回應<br>
-      <strong>沒命中</strong>（例如「helloo」「你好啊請問」）→ 往下走主管判斷
-    </li>
-    <li>
-      <strong>③ Sonnet 主管統一決策</strong> <span style="background:#ede9fe;padding:2px 8px;border-radius:4px;font-size:12px;color:#7c3aed;font-weight:bold;">Sonnet 4.6</span><br>
-      看「完整對話歷史 + intent_log + 系統狀態 + FAQ 清單 + KB 索引」，輸出一個 action（共 10 種）+ 該 action 需要的 payload（要用哪個 FAQ、哪些 KB 文章等）。<br>
-      <strong>有 prompt caching</strong>：固定部分（規則 + FAQ list + KB 索引）走快取省 90% input cost。
-    </li>
-    <li>
-      <strong>④ 執行者派任務</strong> <span style="background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:12px;">純程式</span><br>
-      orchestrator 看主管 action 派給對應節點。每個節點用的模型不同：
-      <ul style="margin-top:6px;font-size:13px;">
-        <li><code>faq_responder</code> → <span style="color:#0284c7;font-weight:bold;">Haiku</span>（照 FAQ 模板潤飾）</li>
-        <li><code>cs_response</code> → <span style="color:#7c3aed;font-weight:bold;">Sonnet</span>（用 KB 生 RAG 答案，有 caching）</li>
-        <li><code>no_kb_handler</code> → <span style="color:#0284c7;font-weight:bold;">Haiku</span>（誠實告知不知道）</li>
-        <li><code>off_topic</code> → <span style="color:#0284c7;font-weight:bold;">Haiku</span>（離題回應）</li>
-        <li><code>greeting_handler</code> → <span style="color:#0284c7;font-weight:bold;">Haiku</span>（生問候語）</li>
-        <li><code>clarification_handler</code> → <span style="color:#0284c7;font-weight:bold;">Haiku</span>（請用戶補充）</li>
-        <li><code>ticket_handler.decide</code> → <span style="color:#0284c7;font-weight:bold;">Haiku</span>（判 yes/no）</li>
-        <li><code>ticket.generate_summary</code> → <span style="color:#7c3aed;font-weight:bold;">Sonnet</span>（生工單摘要）</li>
-      </ul>
-    </li>
-    <li>
-      <strong>⑤ 背景評估</strong> <span style="background:#fef9c3;padding:2px 8px;border-radius:4px;font-size:12px;color:#0284c7;font-weight:bold;">Haiku 4.5</span><br>
-      對話結束後跑評估，把情緒、分類、是否確認解決等資訊寫回 State 供下輪參考。
-    </li>
-  </ol>
+  <h2 id="actions">主管 Action 說明（v6 / v7 共用）</h2>
+  <p>v6 開始用 Sonnet 主管統一決策，每輪訊息進來主管從以下 12 種 action 選 1。<strong>v5 沒有 action enum</strong>（用流水線分支分流），v5 的對應路徑會在「系統運作流程」分頁的 v5 tab 標出。</p>
+  <table>
+    <tr><th>action</th><th>何時用</th><th>備註</th></tr>
+    <tr><td><code>answer_with_faq</code></td><td>命中 FAQ，用標準答案</td><td>最常見</td></tr>
+    <tr><td><code>answer_with_kb</code></td><td>FAQ 未命中但 KB 有相關文章</td><td>常見</td></tr>
+    <tr><td><code>clarify</code></td><td>用戶訊息模糊，需澄清</td><td>常見</td></tr>
+    <tr><td><code>continue_intent</code></td><td>用戶在補充當前意圖細節</td><td>常見</td></tr>
+    <tr><td><code>list_pending_intents</code></td><td>用戶用「下一個」這類指稱詞，列出待辦意圖</td><td>多重意圖場景</td></tr>
+    <tr><td><code>acknowledge_out_of_scope</code></td><td>不在 HiSKIO 業務範圍</td><td>離題訊息</td></tr>
+    <tr><td><code>acknowledge_uncertainty</code></td><td>主管不確定用戶想問什麼，誠實告知</td><td>邊界 case（v6 引入） </td></tr>
+    <tr><td><code>acknowledge_confirmation</code> ⭐</td><td>用戶說「謝謝 / 我知道了 / OK」等確認語</td><td><strong>v7 新增</strong>。回應由 acknowledge_handler（Haiku）寫，自動推進到下一個 pending intent</td></tr>
+    <tr><td><code>suggest_ticket</code></td><td>建議建立工單</td><td>需要人工介入時</td></tr>
+    <tr><td><code>force_escalation</code></td><td>連續多次無法溝通，強制建單</td><td>很少觸發</td></tr>
+    <tr><td><code>greeting</code></td><td>純打招呼</td><td>備案，多數情況被 fast-path 先攔</td></tr>
+  </table>
 
   <div class="note">
     <strong>常見誤解澄清</strong>：「greeting 是不是用 Sonnet 處理？」
@@ -237,380 +291,184 @@
     </ul>
   </div>
 
-  <h3>主管的 10 種 action</h3>
-  <p style="font-size:13px;color:#6b7280;">下表列出主管所有可選 action。實際各 action 的觸發頻率有差，例如 <code>greeting</code> 因為已被 fast-path 攔截，主管很少走到。</p>
-  <table>
-    <tr><th>action</th><th>何時用</th><th>備註</th></tr>
-    <tr><td><code>answer_with_faq</code></td><td>命中 FAQ，用標準答案</td><td>最常見</td></tr>
-    <tr><td><code>answer_with_kb</code></td><td>FAQ 未命中但 KB 有相關文章</td><td>常見</td></tr>
-    <tr><td><code>clarify</code></td><td>用戶訊息模糊，需澄清</td><td>常見</td></tr>
-    <tr><td><code>continue_intent</code></td><td>用戶在補充當前意圖細節</td><td>常見</td></tr>
-    <tr><td><code>list_pending_intents</code></td><td>用戶用「下一個」這類指稱詞，列出待辦意圖</td><td>多重意圖場景</td></tr>
-    <tr><td><code>acknowledge_out_of_scope</code></td><td>不在 HiSKIO 業務範圍</td><td>離題訊息</td></tr>
-    <tr><td><code>acknowledge_uncertainty</code></td><td>主管不確定用戶想問什麼，誠實告知</td><td>邊界 case</td></tr>
-    <tr><td><code>suggest_ticket</code></td><td>建議建立工單</td><td>需要人工介入時</td></tr>
-    <tr><td><code>force_escalation</code></td><td>連續多次無法溝通，強制建單</td><td>很少觸發</td></tr>
-    <tr><td><code>greeting</code></td><td>純打招呼</td><td>備案，多數情況被 ② fast-path 先攔</td></tr>
-  </table>
+  <h2 id="flow">系統運作流程（v5 / v6 / v7 切換）</h2>
+  <p>每個版本的架構不同。下方分頁切換對照各版本的：簡述 / 架構圖 / 解決什麼問題 / 踩到什麼新 bug / 實測成本。</p>
 
-  <h3>架構圖（左：流程；右：共用 State）</h3>
-  <p>圖示說明：<span style="background:#ede9fe;padding:2px 8px;border-radius:4px;color:#7c3aed;font-weight:bold;">紫色 = Sonnet 4.6</span>　<span style="background:#dbeafe;padding:2px 8px;border-radius:4px;color:#0284c7;font-weight:bold;">藍色 = Haiku 4.5</span>　<span style="background:#fef3c7;padding:2px 8px;border-radius:4px;color:#a16207;font-weight:bold;">黃色 = 純程式 / regex</span></p>
-  <div style="background:#fff; border:1px solid #e3e5ea; border-radius:8px; padding:16px; overflow-x:auto;">
-    <svg width="1400" height="1480" viewBox="0 0 1400 1480" xmlns="http://www.w3.org/2000/svg" style="max-width:100%;height:auto;">
-      <defs>
-        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-          <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
-        </marker>
-        <marker id="arrow-state" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto">
-          <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
-        </marker>
-        <style>
-          .box { fill: #fff; stroke: #475569; stroke-width: 1.5; rx: 6; ry: 6; }
-          .box-sonnet { fill: #ede9fe; stroke: #7c3aed; stroke-width: 2; }
-          .box-haiku  { fill: #dbeafe; stroke: #0284c7; stroke-width: 1.5; }
-          .box-code   { fill: #fef3c7; stroke: #a16207; stroke-width: 1.5; }
-          .box-end    { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.5; }
-          .stage-bg   { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1; stroke-dasharray: 5,3; rx: 8; ry: 8; }
-          .stage-label{ font-family: -apple-system, sans-serif; font-size: 13px; font-weight: bold; fill: #475569; }
-          .label      { font-family: -apple-system, sans-serif; font-size: 12px; fill: #1f2937; text-anchor: middle; }
-          .label-bold { font-weight: bold; }
-          .label-mini { font-size: 10px; fill: #6b7280; }
-          .label-tag  { font-size: 9px; font-weight: bold; }
-          .arrow      { stroke: #475569; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
-          .arrow-thin { stroke: #94a3b8; stroke-width: 1; fill: none; stroke-dasharray: 3,2; marker-end: url(#arrow-state); }
-          .branch-label { font-size: 10px; fill: #475569; }
-          .state-section { fill: #fff7ed; stroke: #fb923c; stroke-width: 1; rx: 4; ry: 4; }
-          .state-title { font-size: 11px; font-weight: bold; fill: #c2410c; }
-          .state-field { font-size: 10px; fill: #475569; font-family: ui-monospace, monospace; }
-        </style>
-      </defs>
-
-      <!-- ───────── 階段標籤（左側 banner）───────── -->
-      <text class="stage-label" x="20" y="100">階段 0</text>
-      <text class="stage-label" x="20" y="115">入口攔截</text>
-
-      <text class="stage-label" x="20" y="270">階段 1</text>
-      <text class="stage-label" x="20" y="285">主管決策</text>
-
-      <text class="stage-label" x="20" y="500">階段 2</text>
-      <text class="stage-label" x="20" y="515">執行者派任</text>
-
-      <text class="stage-label" x="20" y="900">階段 3</text>
-      <text class="stage-label" x="20" y="915">背景評估</text>
-
-      <text class="stage-label" x="20" y="1100">階段 4</text>
-      <text class="stage-label" x="20" y="1115">服務限制 + 工單</text>
-
-      <!-- ───────── 用戶訊息（最頂端）───────── -->
-      <rect class="box" x="380" y="20" width="240" height="44" style="fill:#1e293b;stroke:#1e293b"/>
-      <text class="label label-bold" x="500" y="40" style="fill:#fff">用戶訊息進來</text>
-      <text class="label-mini" x="500" y="55" style="fill:#cbd5e1">POST /api/chat</text>
-
-      <!-- ───────── 階段 0 (兩個並列攔截) ───────── -->
-      <rect class="stage-bg" x="80" y="78" width="850" height="160"/>
-
-      <!-- phase 攔截 -->
-      <line class="arrow" x1="430" y1="64" x2="280" y2="100"/>
-      <rect class="box box-code" x="100" y="100" width="360" height="120"/>
-      <text class="label-tag" x="280" y="118" style="fill:#a16207">純程式攔截</text>
-      <text class="label label-bold" x="280" y="135">① 特殊 phase 攔截</text>
-      <text class="label-mini" x="280" y="155">if state.phase in:</text>
-      <text class="label-mini" x="280" y="170">　等待工單確認 / 等待 Email</text>
-      <text class="label-mini" x="280" y="183">　等待用戶選擇意圖 / 已結束</text>
-      <text class="label-mini" x="280" y="200" style="fill:#16a34a;font-weight:bold">命中 → 跳過主管，直接進對應 handler</text>
-      <text class="label-mini" x="280" y="213">沒命中 → 往下走 ↓</text>
-
-      <!-- greeting fast-path -->
-      <line class="arrow" x1="570" y1="64" x2="730" y2="100"/>
-      <rect class="box box-code" x="550" y="100" width="360" height="120"/>
-      <text class="label-tag" x="730" y="118" style="fill:#a16207">regex 攔截</text>
-      <text class="label label-bold" x="730" y="135">② Greeting fast-path</text>
-      <text class="label-mini" x="730" y="155">if _GREETING_RE.match(msg):</text>
-      <text class="label-mini" x="730" y="170">　純招呼整句：你好/Hi/嗨/hello</text>
-      <text class="label-mini" x="730" y="185">　/在嗎/早安/晚安 等</text>
-      <text class="label-mini" x="730" y="200" style="fill:#16a34a;font-weight:bold">命中 → 直接派 greeting_handler</text>
-      <text class="label-mini" x="730" y="213">沒命中 → 往下走 ↓</text>
-
-      <!-- 兩條都未命中匯流到主管 -->
-      <line class="arrow" x1="280" y1="220" x2="500" y2="295"/>
-      <line class="arrow" x1="730" y1="220" x2="500" y2="295"/>
-
-      <!-- ───────── 階段 1 主管 ───────── -->
-      <rect class="stage-bg" x="80" y="245" width="850" height="200"/>
-
-      <rect class="box box-sonnet" x="180" y="295" width="640" height="140"/>
-      <text class="label-tag" x="500" y="313" style="fill:#7c3aed">Sonnet 4.6</text>
-      <text class="label label-bold" x="500" y="332" style="font-size:14px;fill:#7c3aed">主管統一決策節點 (manager.decide)</text>
-      <text class="label-mini" x="500" y="352">看：用戶訊息 + 完整對話歷史(10輪) + intent_log + phase + 計數器</text>
-      <text class="label-mini" x="500" y="368">　 + 用戶身分 + 完整 FAQ 清單 + 完整 KB 索引</text>
-      <text class="label-mini" x="500" y="384">輸出 JSON：recommended_action(10選1) + payload(faq_id/kb_ids/clarify_msg)</text>
-      <text class="label-mini" x="500" y="400">　　　　　 + new_intents_to_log(role/in_scope) + reason</text>
-      <text class="label-mini" x="500" y="420" style="fill:#7c3aed;font-weight:bold">★ 有 prompt caching：固定部分快取（規則+FAQ+KB），每次省 90%</text>
-
-      <!-- ───────── 階段 2 執行者派任 ───────── -->
-      <rect class="stage-bg" x="80" y="465" width="1180" height="395"/>
-
-      <line class="arrow" x1="500" y1="435" x2="500" y2="490"/>
-      <rect class="box" x="350" y="490" width="300" height="36"/>
-      <text class="label label-bold" x="500" y="513">_execute_action（按 action 派發）</text>
-
-      <!-- 第一排執行者：5 個 -->
-      <line class="arrow" x1="500" y1="526" x2="160" y2="580"/>
-      <line class="arrow" x1="500" y1="526" x2="380" y2="580"/>
-      <line class="arrow" x1="500" y1="526" x2="600" y2="580"/>
-      <line class="arrow" x1="500" y1="526" x2="820" y2="580"/>
-      <line class="arrow" x1="500" y1="526" x2="1040" y2="580"/>
-
-      <text class="branch-label" x="280" y="555">greeting</text>
-      <text class="branch-label" x="455" y="555">clarify / unclear</text>
-      <text class="branch-label" x="660" y="555">answer_with_faq</text>
-      <text class="branch-label" x="900" y="555">answer_with_kb</text>
-      <text class="branch-label" x="1100" y="555">acknowledge_*</text>
-
-      <!-- greeting_handler -->
-      <rect class="box box-haiku" x="65" y="580" width="190" height="110"/>
-      <text class="label-tag" x="160" y="598" style="fill:#0284c7">Haiku</text>
-      <text class="label label-bold" x="160" y="615">greeting_handler</text>
-      <text class="label-mini" x="160" y="633">生問候訊息</text>
-      <text class="label-mini" x="160" y="650" style="fill:#0284c7">寫入 State：</text>
-      <text class="label-mini" x="160" y="665">intent_state.greeting_count++</text>
-      <text class="label-mini" x="160" y="682" style="fill:#16a34a;font-weight:bold">→ 淺藍虛線 greeting</text>
-
-      <!-- clarification_handler -->
-      <rect class="box box-haiku" x="285" y="580" width="190" height="110"/>
-      <text class="label-tag" x="380" y="598" style="fill:#0284c7">Haiku</text>
-      <text class="label label-bold" x="380" y="615">clarification_handler</text>
-      <text class="label-mini" x="380" y="633">請用戶補充</text>
-      <text class="label-mini" x="380" y="650" style="fill:#0284c7">寫入 State：</text>
-      <text class="label-mini" x="380" y="665">intent_state.consecutive_unclear_count++</text>
-      <text class="label-mini" x="380" y="682" style="fill:#eab308;font-weight:bold">→ 橘黃 clarification</text>
-
-      <!-- faq_responder -->
-      <rect class="box box-haiku" x="505" y="580" width="190" height="110"/>
-      <text class="label-tag" x="600" y="598" style="fill:#0284c7">Haiku</text>
-      <text class="label label-bold" x="600" y="615">faq_responder</text>
-      <text class="label-mini" x="600" y="633">FAQ 模板潤飾（核心步驟一字不漏）</text>
-      <text class="label-mini" x="600" y="654" style="fill:#0284c7">寫入 State：</text>
-      <text class="label-mini" x="600" y="668">faq_context.matched_faq_id</text>
-      <text class="label-mini" x="600" y="681">　　　　　　.answer_strategy</text>
-      <text class="label-mini" x="600" y="697" style="fill:#16a34a;font-weight:bold">→ 綠 faq</text>
-
-      <!-- cs_response -->
-      <rect class="box box-sonnet" x="725" y="580" width="190" height="110"/>
-      <text class="label-tag" x="820" y="598" style="fill:#7c3aed">Sonnet (cached)</text>
-      <text class="label label-bold" x="820" y="615">cs_response</text>
-      <text class="label-mini" x="820" y="633">用 KB 文章生 RAG 答案</text>
-      <text class="label-mini" x="820" y="654" style="fill:#0284c7">寫入 State：</text>
-      <text class="label-mini" x="820" y="668">kb_context.indexed_articles</text>
-      <text class="label-mini" x="820" y="681">　　　　　 .articles_used_in_response</text>
-      <text class="label-mini" x="820" y="697" style="fill:#2563eb;font-weight:bold">→ 藍 rag</text>
-
-      <!-- off_topic / no_kb_handler 並排 -->
-      <rect class="box box-haiku" x="945" y="580" width="190" height="50"/>
-      <text class="label-tag" x="1040" y="595" style="fill:#0284c7">Haiku</text>
-      <text class="label label-bold" x="1040" y="613">off_topic</text>
-      <text class="label-mini" x="1040" y="625" style="fill:#ea580c;font-weight:bold">→ 橘 off_topic</text>
-
-      <rect class="box box-haiku" x="945" y="640" width="190" height="50"/>
-      <text class="label-tag" x="1040" y="655" style="fill:#0284c7">Haiku</text>
-      <text class="label label-bold" x="1040" y="673">no_kb_handler</text>
-      <text class="label-mini" x="1040" y="685" style="fill:#ec4899;font-weight:bold">→ 粉紅 no_kb_match</text>
-
-      <!-- 第二排：ticket / list_pending / continue / force_escalation -->
-      <line class="arrow" x1="500" y1="526" x2="160" y2="730"/>
-      <line class="arrow" x1="500" y1="526" x2="380" y2="730"/>
-      <line class="arrow" x1="500" y1="526" x2="600" y2="730"/>
-      <line class="arrow" x1="500" y1="526" x2="820" y2="730"/>
-
-      <text class="branch-label" x="160" y="725">suggest_ticket</text>
-      <text class="branch-label" x="380" y="725">list_pending_intents</text>
-      <text class="branch-label" x="600" y="725">continue_intent</text>
-      <text class="branch-label" x="820" y="725">force_escalation</text>
-
-      <!-- ticket_handler -->
-      <rect class="box box-haiku" x="65" y="730" width="190" height="110"/>
-      <text class="label-tag" x="160" y="748" style="fill:#0284c7">Haiku + Sonnet</text>
-      <text class="label label-bold" x="160" y="765">ticket_handler</text>
-      <text class="label-mini" x="160" y="783">decide(Y/N/U) Haiku</text>
-      <text class="label-mini" x="160" y="797">create_ticket Sonnet 摘要</text>
-      <text class="label-mini" x="160" y="814" style="fill:#0284c7">寫入 State：</text>
-      <text class="label-mini" x="160" y="828" style="fill:#7c3aed;font-weight:bold">ticket_state.ticket_id 等</text>
-
-      <!-- intent_selector -->
-      <rect class="box box-haiku" x="285" y="730" width="190" height="110"/>
-      <text class="label-tag" x="380" y="748" style="fill:#0284c7">Haiku</text>
-      <text class="label label-bold" x="380" y="765">intent_selector</text>
-      <text class="label-mini" x="380" y="783">列 intent_log 待辦清單</text>
-      <text class="label-mini" x="380" y="800" style="fill:#0284c7">寫入 State：</text>
-      <text class="label-mini" x="380" y="814">phase = 等待用戶選擇意圖</text>
-      <text class="label-mini" x="380" y="828" style="fill:#4c1d95;font-weight:bold">→ 深紫 intent_selection</text>
-
-      <!-- continue_intent (沿用 cs_response) -->
-      <rect class="box" x="505" y="730" width="190" height="110" style="fill:#f3f4f6"/>
-      <text class="label-tag" x="600" y="748" style="fill:#6b7280">沿用既有節點</text>
-      <text class="label label-bold" x="600" y="765">continue_intent</text>
-      <text class="label-mini" x="600" y="783">不切意圖，</text>
-      <text class="label-mini" x="600" y="797">繼續走 cs_response</text>
-      <text class="label-mini" x="600" y="817" style="fill:#0284c7">不寫入新 State</text>
-
-      <!-- force_escalation -->
-      <rect class="box box-code" x="725" y="730" width="190" height="110"/>
-      <text class="label-tag" x="820" y="748" style="fill:#a16207">純程式</text>
-      <text class="label label-bold" x="820" y="765">force_escalation</text>
-      <text class="label-mini" x="820" y="783">unclear 連 3 次</text>
-      <text class="label-mini" x="820" y="800" style="fill:#0284c7">寫入 State：</text>
-      <text class="label-mini" x="820" y="814">ticket_suggested = True</text>
-      <text class="label-mini" x="820" y="828" style="fill:#7c3aed;font-weight:bold">→ 紫 ticket_flow</text>
-
-      <!-- ───────── 階段 3 evaluator ───────── -->
-      <rect class="stage-bg" x="80" y="880" width="1180" height="120"/>
-      <line class="arrow" x1="160" y1="840" x2="500" y2="920"/>
-      <line class="arrow" x1="380" y1="840" x2="500" y2="920"/>
-      <line class="arrow" x1="600" y1="697" x2="500" y2="920"/>
-      <line class="arrow" x1="820" y1="697" x2="500" y2="920"/>
-
-      <rect class="box box-haiku" x="280" y="920" width="440" height="70"/>
-      <text class="label-tag" x="500" y="938" style="fill:#0284c7">Haiku 4.5</text>
-      <text class="label label-bold" x="500" y="955">背景評估 evaluator</text>
-      <text class="label-mini" x="500" y="972">只在 customer_service 路徑且 phase=對話中時跑</text>
-      <text class="label-mini" x="500" y="985" style="fill:#0284c7">寫入：issue_context（情緒/分類/摘要）+ intent_log status</text>
-
-      <!-- ───────── 階段 4 服務限制 + 工單 ───────── -->
-      <rect class="stage-bg" x="80" y="1015" width="1180" height="320"/>
-
-      <line class="arrow" x1="500" y1="990" x2="500" y2="1040"/>
-      <rect class="box box-code" x="280" y="1040" width="440" height="100"/>
-      <text class="label-tag" x="500" y="1058" style="fill:#a16207">純程式</text>
-      <text class="label label-bold" x="500" y="1077">check_and_update_limits</text>
-      <text class="label-mini" x="500" y="1097">檢查 4 個計數器：turn / off_topic / low_conf / unresolved</text>
-      <text class="label-mini" x="500" y="1112">任一達 max → service_limits.limit_reached = True</text>
-      <text class="label-mini" x="500" y="1127" style="fill:#7c3aed;font-weight:bold">下一輪用戶說話時自動觸發 suggest_ticket（紫框建議建單）</text>
-
-      <!-- 工單流程 phase 切換 -->
-      <line class="arrow" x1="500" y1="1140" x2="500" y2="1175"/>
-      <rect class="box" x="180" y="1175" width="640" height="130" style="fill:#fef3c7;stroke:#a16207"/>
-      <text class="label label-bold" x="500" y="1195">工單流程 phase 切換（多階段狀態機）</text>
-      <text class="label-mini" x="500" y="1215">建議建單 → phase=等待工單確認 → 用戶回「好/不用」（Haiku 判 Y/N/U）</text>
-      <text class="label-mini" x="500" y="1230">↓ 同意</text>
-      <text class="label-mini" x="500" y="1248">會員：自動帶 user_email 建單　訪客：phase=等待 Email → 收 + regex 驗證</text>
-      <text class="label-mini" x="500" y="1265">↓ Email OK</text>
-      <text class="label-mini" x="500" y="1283">Sonnet 生工單摘要 → INSERT SQLite tickets 表 → phase=已結束</text>
-      <text class="label-mini" x="500" y="1298" style="fill:#dc2626;font-weight:bold">→ 紅 session_ended</text>
-
-      <!-- 結尾 -->
-      <line class="arrow" x1="500" y1="1305" x2="500" y2="1340"/>
-      <rect class="box box-end" x="380" y="1340" width="240" height="44"/>
-      <text class="label label-bold" x="500" y="1362">save_state + 回應給用戶</text>
-      <text class="label-mini" x="500" y="1377">JSON 含 ai_response + 完整 state</text>
-
-      <!-- ───────── 右側：共享 State (JSON) 結構 ───────── -->
-      <rect x="970" y="80" width="410" height="780" style="fill:#fffbeb;stroke:#f59e0b;stroke-width:2;rx:8;"/>
-      <text x="1175" y="105" style="font-family:-apple-system;font-size:14px;font-weight:bold;fill:#92400e;text-anchor:middle">共享 State (JSON)</text>
-      <text x="1175" y="123" style="font-family:-apple-system;font-size:11px;fill:#92400e;text-anchor:middle">所有節點共讀共寫，每輪結束 save_state 回 SQLite</text>
-
-      <!-- Session 基本 -->
-      <rect class="state-section" x="985" y="135" width="380" height="65"/>
-      <text class="state-title" x="995" y="150">📌 Session 基本</text>
-      <text class="state-field" x="995" y="166">session_id, created_at, updated_at</text>
-      <text class="state-field" x="995" y="180">phase ←（節點切換時改）</text>
-      <text class="state-field" x="995" y="194">turn_count ←（每輪+1，greeting 不增）</text>
-
-      <!-- user_info -->
-      <rect class="state-section" x="985" y="208" width="380" height="65"/>
-      <text class="state-title" x="995" y="223">👤 user_info</text>
-      <text class="state-field" x="995" y="239">is_logged_in, user_id, user_name</text>
-      <text class="state-field" x="995" y="253">user_email, purchase_history</text>
-      <text class="state-field" x="995" y="267" style="fill:#16a34a">主管讀取做為決策依據</text>
-
-      <!-- intent_state -->
-      <rect class="state-section" x="985" y="281" width="380" height="120" style="fill:#fce7f3;stroke:#ec4899"/>
-      <text class="state-title" x="995" y="296" style="fill:#be185d">🎯 intent_state（v6 主管模式核心）</text>
-      <text class="state-field" x="995" y="312">input_classification ← manager 寫入</text>
-      <text class="state-field" x="995" y="326">consecutive_unclear_count（達 3 強制建單）</text>
-      <text class="state-field" x="995" y="340">greeting_count, max_greeting_count</text>
-      <text class="state-field" x="995" y="354">current_intent ← 切換意圖時改</text>
-      <text class="state-field" x="995" y="368">intent_log[ ] ← 永不刪除</text>
-      <text class="state-field" x="1015" y="382">{ text, status, role, in_scope, first_turn }</text>
-      <text class="state-field" x="995" y="396" style="fill:#16a34a">主管 + evaluator + selector 共寫</text>
-
-      <!-- issue_context -->
-      <rect class="state-section" x="985" y="409" width="380" height="65"/>
-      <text class="state-title" x="995" y="424">📊 issue_context</text>
-      <text class="state-field" x="995" y="440">category, sub_category, summary</text>
-      <text class="state-field" x="995" y="454">user_emotion ← evaluator 寫入</text>
-
-      <!-- faq_context -->
-      <rect class="state-section" x="985" y="482" width="380" height="55"/>
-      <text class="state-title" x="995" y="497">❓ faq_context</text>
-      <text class="state-field" x="995" y="513">matched_faq_id, match_confidence</text>
-      <text class="state-field" x="995" y="527">answer_strategy ← faq_responder 寫入</text>
-
-      <!-- kb_context -->
-      <rect class="state-section" x="985" y="545" width="380" height="55"/>
-      <text class="state-title" x="995" y="560">📚 kb_context</text>
-      <text class="state-field" x="995" y="576">indexed_articles ← manager 挑選</text>
-      <text class="state-field" x="995" y="590">articles_used_in_response ← cs_response 寫</text>
-
-      <!-- service_limits -->
-      <rect class="state-section" x="985" y="608" width="380" height="100"/>
-      <text class="state-title" x="995" y="623">🚫 service_limits</text>
-      <text class="state-field" x="995" y="639">max_turns_per_session: 20</text>
-      <text class="state-field" x="995" y="653">max_off_topic_count: 3</text>
-      <text class="state-field" x="995" y="667">max_low_confidence_count: 3</text>
-      <text class="state-field" x="995" y="681">max_unresolved_count: 3</text>
-      <text class="state-field" x="995" y="695">limit_reached, limit_reached_reason</text>
-
-      <!-- ticket_state -->
-      <rect class="state-section" x="985" y="716" width="380" height="80"/>
-      <text class="state-title" x="995" y="731">🎫 ticket_state</text>
-      <text class="state-field" x="995" y="747">ticket_suggested, user_decision</text>
-      <text class="state-field" x="995" y="761">collecting_email, email_attempts</text>
-      <text class="state-field" x="995" y="775">ticket_id, ticket_created_at</text>
-      <text class="state-field" x="995" y="789" style="fill:#16a34a">ticket_handler 寫入</text>
-
-      <!-- escalation_signals -->
-      <rect class="state-section" x="985" y="804" width="380" height="50"/>
-      <text class="state-title" x="995" y="819">⚠️ escalation_signals</text>
-      <text class="state-field" x="995" y="835">no_kb_match ← no_kb_handler 寫入</text>
-
-      <!-- chat_history（單獨另放，因為很大） -->
-      <rect class="state-section" x="985" y="1010" width="380" height="55" style="fill:#e0e7ff;stroke:#6366f1"/>
-      <text class="state-title" x="995" y="1025" style="fill:#4338ca">💬 chat_history</text>
-      <text class="state-field" x="995" y="1041">每輪 user + assistant 訊息陣列</text>
-      <text class="state-field" x="995" y="1055">含 timestamp, content, response_type</text>
-
-      <!-- 連線示意：State 影響哪些節點 -->
-      <line class="arrow-thin" x1="985" y1="345" x2="820" y2="395"/>
-      <text x="900" y="378" style="font-size:9px;fill:#94a3b8">主管讀</text>
-
-      <line class="arrow-thin" x1="985" y1="685" x2="820" y2="1080"/>
-      <text x="900" y="900" style="font-size:9px;fill:#94a3b8">limits 檢查讀</text>
-
-      <line class="arrow-thin" x1="985" y1="755" x2="280" y2="800"/>
-      <text x="650" y="785" style="font-size:9px;fill:#94a3b8">ticket 流程讀寫</text>
-
-      <!-- 圖例 -->
-      <rect x="985" y="870" width="380" height="125" style="fill:#f1f5f9;stroke:#64748b;stroke-width:1;rx:4"/>
-      <text x="1175" y="887" style="font-size:11px;font-weight:bold;fill:#334155;text-anchor:middle">圖例</text>
-
-      <rect x="995" y="897" width="14" height="14" style="fill:#ede9fe;stroke:#7c3aed;stroke-width:1.5"/>
-      <text x="1014" y="909" style="font-size:11px;fill:#1f2937">Sonnet 4.6（主管 + cs_response，貴但會看全貌）</text>
-
-      <rect x="995" y="917" width="14" height="14" style="fill:#dbeafe;stroke:#0284c7;stroke-width:1.5"/>
-      <text x="1014" y="929" style="font-size:11px;fill:#1f2937">Haiku 4.5（執行者 + 評估，便宜 4 倍）</text>
-
-      <rect x="995" y="937" width="14" height="14" style="fill:#fef3c7;stroke:#a16207;stroke-width:1.5"/>
-      <text x="1014" y="949" style="font-size:11px;fill:#1f2937">純程式 / regex（不打 LLM）</text>
-
-      <rect x="995" y="957" width="14" height="14" style="fill:#fff7ed;stroke:#fb923c;stroke-width:1"/>
-      <text x="1014" y="969" style="font-size:11px;fill:#1f2937">State JSON 區塊（每輪可能被多個節點修改）</text>
-
-      <text x="995" y="987" style="font-size:10px;fill:#64748b;font-style:italic">虛線箭頭：節點與 State 的讀寫關係</text>
-    </svg>
+  <div class="vtabs">
+    <button data-tab="v5">v5 流水線</button>
+    <button data-tab="v6">v6 主管統一</button>
+    <button data-tab="v7" class="active">v7.2（current）<span class="badge">main</span></button>
   </div>
-  <p style="font-size:12px;color:#6b7280;margin-top:8px;">
-    左側顯示「訊息進來 → 5 階段處理 → 回應」的順序與分支；右側列出全部 State 區塊與每個欄位是由誰讀寫。
-  </p>
+
+  <!-- ────────── v5 panel ────────── -->
+  <div class="vpanel" data-panel="v5">
+    <h3>v5 — 分類器流水線（已歸檔，branch=v5-pipeline-mode）</h3>
+    <p><strong>核心想法</strong>：4 個 Haiku 接力跑，每節點看自己負責的一小塊資料。沒有「主管」、沒有 action enum。</p>
+
+    <div class="arch-box"><span class="lab">[用戶訊息]</span>
+        ↓
+  ┌────────────────────────────────┐
+  │ entry_classifier（Haiku）       │ → greeting / unclear / off_topic / customer_service
+  └────────────────────────────────┘
+        ↓ customer_service
+  ┌────────────────────────────────┐
+  │ intent_clarity（Haiku）         │ → simple / parallel / 指稱詞
+  └────────────────────────────────┘
+        ↓
+  ┌────────────────────────────────┐
+  │ faq_matcher（Haiku）            │ → matched_id + confidence
+  └────────────────────────────────┘
+        ↓ confidence ≥ 0.7        ↓ confidence &lt; 0.7
+  <span class="lab3">[faq_responder Haiku]</span>      <span class="lab2">[kb_indexer Haiku]</span>
+                                  ↓
+                            <span class="lab4">[cs_response Sonnet]</span>
+        ↓
+  <span class="lab">[evaluator Haiku 背景]</span> → 寫筆記到 state</div>
+
+    <h4>解的問題（相比更早 v3）</h4>
+    <ul>
+      <li>把入口分類拆細（greeting / unclear / off_topic / customer_service）</li>
+      <li>加意圖明確度節點（處理多重意圖、指稱詞）</li>
+      <li>加 intent_log 結構追蹤所有意圖 status</li>
+    </ul>
+
+    <h4>踩到的 bug</h4>
+    <table>
+      <tr><th>bug</th><th>實況</th></tr>
+      <tr><td>「人工建單為什麼以後不能動作了」鬼打牆 ⭐</td><td>entry_classifier 看到「人工建單」字眼歸 customer_service → kb_indexer 被歷史污染挑 kb_005（發票）→ cs_response 拿到 KB 全文回「請問您的發票問題是哪方面...」。沒有任何節點看出用戶在質疑系統。</td></tr>
+      <tr><td>同樣意思走不同 path 結果不一致</td><td>選號「3」走 phase 攔截、陳述句「我有水果問題」走 entry_classifier，兩條路結果不一樣。</td></tr>
+      <tr><td>ticket_state.declined 永久封印</td><td>用戶拒絕一次工單後、之後新意圖也不再被建議建單。</td></tr>
+      <tr><td>邊界 case 永遠補不完</td><td>新訊號要在 entry_classifier、faq_matcher、kb_indexer、cs_response 都加分支。</td></tr>
+    </table>
+
+    <h4>成本</h4>
+    <p><span class="cost-box neutral">v5 沒實測 benchmark</span>（理論上全 Haiku、比 v6 便宜，但邊界 case 體驗差）</p>
+  </div>
+
+  <!-- ────────── v6 panel ────────── -->
+  <div class="vpanel" data-panel="v6">
+    <h3>v6 — 主管統一決策（已歸檔，branch=v6-manager-mode）</h3>
+    <p><strong>核心想法</strong>：拆掉 4 個 Haiku 分類器，改由一個 Sonnet 主管看「全貌」一次決策，輸出 11 個 action 之一，分派給 executor 節點生回應。</p>
+
+    <div class="arch-box"><span class="lab">[用戶訊息]</span>
+        ↓
+  ┌────────────────────────────────┐
+  │ phase 攔截 / greeting fast-path │ 純程式 / regex
+  └────────────────────────────────┘
+        ↓ 沒命中
+  ┌────────────────────────────────────────────┐
+  │ <span class="lab4">manager.decide（Sonnet）</span>                    │
+  │ 看：用戶這句 + 完整 history（10 輪）         │
+  │     + intent_log + 服務狀態                │
+  │     + <span class="lab3">完整 FAQ 全表 + 完整 KB 索引</span>          │
+  │ 輸出：recommended_action（11 選 1）+ payload│
+  └────────────────────────────────────────────┘
+        ↓
+  ┌────────────────────────────────┐
+  │ orchestrator._execute_*         │ 純程式派工
+  └────────────────────────────────┘
+        ↓
+  ┌─ executor 節點 ────────────────┐
+  │ faq_responder Haiku            │
+  │ cs_response Sonnet (cached)    │
+  │ no_kb_handler Haiku            │
+  │ off_topic Haiku                │
+  │ ticket_handler Haiku/Sonnet    │
+  │ ...                            │
+  └────────────────────────────────┘
+        ↓
+  <span class="lab">[evaluator Haiku 背景]</span></div>
+
+    <h4>解的問題（v5 → v6）</h4>
+    <ul>
+      <li>v5「人工建單」鬼打牆：主管看完整 history 能識別 meta 質疑 → 選 suggest_ticket</li>
+      <li>路徑不一致：全部進主管，只有一條 code path</li>
+      <li>「我聽不懂」一級公民：新增 acknowledge_uncertainty action</li>
+      <li>邊界 case 加 action enum 一處改完，不必到處改節點</li>
+    </ul>
+
+    <h4>v6 自己踩到的 bug（驅動 v7 升級）</h4>
+    <table>
+      <tr><th>bug</th><th>實況</th></tr>
+      <tr><td>「OK 了 謝謝」鬼打牆 ⭐</td><td>主管的 11 個 action 沒對應 confirmation 出口、硬塞 continue_intent → 把當前 intent 主題又重答一遍。</td></tr>
+      <tr><td>evaluator 漏判 confirmed_resolved</td><td>prompt「對齊 5 個範例」太死板、Haiku 在 t=0 嚴格字面對齊，「我知道了 / 了解了」這類常見表達被判 false。</td></tr>
+      <tr><td>主管 prompt 越加越笨</td><td>FAQ 全表 + KB 索引 + 規則都壓在 system prompt、Sonnet 注意力分散、混合意圖（in/out scope）容易判 clarify。</td></tr>
+    </table>
+
+    <h4>成本</h4>
+    <p><span class="cost-box neutral">NT$3.81 / 10 輪</span>（開 Sonnet prompt cache 後實測）</p>
+  </div>
+
+  <!-- ────────── v7 panel ────────── -->
+  <div class="vpanel active" data-panel="v7">
+    <h3>v7.2 — 流水線權威 + 主管最終決策 + Haiku acknowledge handler（current main）</h3>
+    <p><strong>核心想法</strong>：把 v5 流水線復活做為「FAQ/KB 比對權威」，主管 Sonnet 改吃流水線「提議卡」，從 12 個 action 選 1（多了 acknowledge_confirmation）。主管不再吃 FAQ/KB 全表，acknowledge 回應由 Haiku handler 寫。</p>
+
+    <div class="arch-box"><span class="lab">[用戶訊息]</span>
+        ↓
+  ┌────────────────────────────────┐
+  │ phase 攔截 / greeting fast-path │ 純程式
+  └────────────────────────────────┘
+        ↓ 沒命中
+  ┌────────────────────────────────┐
+  │ <span class="lab2">pipeline.run（4 個 Haiku 接力）</span>  │ ← v5 流水線復活
+  │ entry_classifier               │
+  │ intent_clarity                 │
+  │ faq_matcher → matched_id+conf  │
+  │ kb_indexer → article ids        │
+  │                                │
+  │ 輸出 hint 卡片：分類 / FAQ 命中 │
+  │ /KB 文章建議 / 偵測意圖         │
+  └────────────────────────────────┘
+        ↓
+  ┌────────────────────────────────┐
+  │ <span class="lab4">manager.decide（Sonnet 瘦版）</span>     │
+  │ 看：用戶這句 + history 10 輪    │
+  │     + intent_log + 流水線 hint │
+  │ <span class="lab3">不再吃 FAQ/KB 全表（流水線權威）</span>  │
+  │ 輸出 12 個 action 選 1          │
+  └────────────────────────────────┘
+        ↓
+  ┌─ executor ─────────────────────┐
+  │ faq_responder Haiku            │
+  │ cs_response Sonnet (cached)    │
+  │ <span class="lab2">acknowledge_handler Haiku（v7.2 新）</span> │
+  │ ... 其他不變                    │
+  └────────────────────────────────┘
+        ↓
+  <span class="lab">[evaluator Haiku 背景，prompt 已放寬語意]</span></div>
+
+    <h4>解的問題（v6 → v7）</h4>
+    <ul>
+      <li><strong>v6 鬼打牆「OK 了 謝謝」</strong>：新增 <code>acknowledge_confirmation</code> action，acknowledge_handler（Haiku）讀 intent_log 自動推進到下一個 pending intent</li>
+      <li><strong>evaluator 漏判</strong>：prompt 從「對齊範例」改「看語意不看字面」、新增「包括但不限於」措辭</li>
+      <li><strong>主管 prompt 過長</strong>：移除 FAQ/KB 全表，命中項詳情走 hint 帶進 user prompt（system prompt cache 命中區更小但 input 更短）</li>
+      <li><strong>v5 鬼打牆殘餘</strong>：流水線判錯時主管不挑替代 FAQ、改選 acknowledge_uncertainty 請用戶澄清</li>
+    </ul>
+
+    <h4>關鍵設計：流水線當權威 + 拆 acknowledge</h4>
+    <ul>
+      <li><strong>流水線權威（v7.1）</strong>：主管不再從零挑 FAQ/KB，只能採信流水線命中或選「不走 FAQ/KB」action（acknowledge_*、suggest_ticket、clarify）</li>
+      <li><strong>拆 acknowledge（v7.2）</strong>：主管 Sonnet 仍負責「判定是 confirmation」（決策），acknowledge_handler（Haiku）負責「寫回應」（生成）。各司其職</li>
+    </ul>
+
+    <h4>成本演化</h4>
+    <p>
+      <span class="cost-box neutral">v6 baseline NT$3.81</span>
+      <span class="cost-box bad">v7 初版 NT$4.39（+15%）</span>
+      <span class="cost-box neutral">v7.1 NT$3.74 (-2%)</span>
+      <span class="cost-box">v7.2 NT$3.30（-13%）</span>
+    </p>
+    <p style="font-size:13px;color:#6b7280;">每版本同一份 <code>data/test_cases/benchmark_v1.json</code> scenario，10 輪會員對話，含 prompt cache。</p>
+
+    <h4>實測行為（v7.2 第 8 輪）</h4>
+    <p style="background:#fff;padding:12px;border-left:4px solid #84cc16;border-radius:4px;font-size:13px;">
+      用戶：「OK 了 謝謝」<br>
+      AI（acknowledge_handler，Haiku）：「不客氣！退費的部分就先這樣。<strong>您之前還提到「付款相關問題」，要先處理嗎？</strong>」
+    </p>
+    <p style="font-size:13px;color:#6b7280;">主動推進 pending intent — 這個能力 Haiku 完全勝任、不需要 Sonnet。</p>
+  </div>
+
 
   <h2 id="state">右側 State 除錯面板欄位對照</h2>
   <p>
@@ -770,93 +628,26 @@
     <li>KB：把 .md 放到 <code>data/kb/</code> → 跑 <code>python scripts/build_kb_index.py</code> → 重啟 server</li>
   </ul>
 
-  <h2 id="versions">版本演化（v5 / v6 / v7）</h2>
-  <p>這個雛形經歷三個架構版本。<strong>共用基礎建設</strong>下方先列、再分版本說明各自做了什麼、解了什麼問題、踩了什麼坑。</p>
-
-  <h3>共用基礎（三版都不變）</h3>
-  <table>
-    <tr><th>面向</th><th>內容</th></tr>
-    <tr><td>State 結構</td><td>session_id / phase / turn_count / user_info / issue_context / faq_context / kb_context / service_limits / ticket_state / intent_state / escalation_signals / chat_history</td></tr>
-    <tr><td>service_limits</td><td>max_turns_per_session=20、max_off_topic_count=3、max_low_confidence_count=3、max_unresolved_count=3</td></tr>
-    <tr><td>phase 攔截</td><td>等待用戶選擇意圖 / 等待工單確認 / 等待 Email / 已結束 — 在 manager 之前優先處理</td></tr>
-    <tr><td>greeting fast-path</td><td>regex 攔下純問候，不打 LLM。greeting_count 上限 3，超過鎖灰框</td></tr>
-    <tr><td>會員/訪客識別</td><td>會員從 mock_users.json 抓 email；訪客在工單流程收 Email（regex 驗證）</td></tr>
-    <tr><td>FAQ 回應規則</td><td>核心步驟一字不漏照抄，由 faq_responder 只潤飾開頭結尾（任何版本都不准 AI 改 core_steps）</td></tr>
-    <tr><td>KB 兩層分離</td><td>data/kb_source/（原稿）→ data/kb/（系統檔）→ kb_index.json（索引），由 build_kb_index.py 產出</td></tr>
-    <tr><td>evaluator 職責</td><td>每輪 AI 回應後背景跑 Haiku，更新 issue_context、low_confidence_count、unresolved_count、intent_log status（confirmed_resolved）</td></tr>
-    <tr><td>工單流程</td><td>建議 → 確認 → 收 Email → Sonnet 生工單摘要 JSON → 寫進 SQLite tickets 表</td></tr>
-  </table>
-
-  <h3>v5 — 分類器流水線（已歸檔，branch=v5-pipeline-mode）</h3>
-  <p><strong>架構</strong>：4 個 Haiku 接力跑 → entry_classifier → intent_clarity → faq_matcher → kb_indexer → cs_response/faq_responder。每節點看自己負責的一小塊資料，輸出傳給下一個。</p>
-  <p><strong>解的問題</strong>：相比更早的 v3、把 router 拆成更精細的入口分類（greeting / unclear / off_topic / customer_service）+ 意圖明確度（simple / parallel_multiple / 指稱詞）+ 平行多意圖追蹤。</p>
-  <p><strong>踩到的 bug</strong></p>
-  <table>
-    <tr><th>bug</th><th>實況</th></tr>
-    <tr><td>「人工建單為什麼以後不能動作了」鬼打牆</td><td>entry_classifier 看到「人工建單」字眼歸 customer_service → kb_indexer 被歷史污染挑 kb_005（發票）→ cs_response 拿到 KB 全文回「請問您的發票問題是哪方面...」。沒有任何節點看出用戶在質疑系統。</td></tr>
-    <tr><td>同樣意思走不同 path 結果不一致</td><td>選號「3」走 phase 攔截、陳述句「我有水果問題」走 entry_classifier，兩條路結果不一樣。</td></tr>
-    <tr><td>ticket_state.declined 永久封印</td><td>用戶拒絕一次工單後、之後新意圖也不再被建議建單。</td></tr>
-    <tr><td>邊界 case 永遠補不完</td><td>新訊號（meta 質疑、「我聽不懂」、混合 in/out scope）要在 entry_classifier、faq_matcher、kb_indexer、cs_response 都加分支。</td></tr>
-  </table>
-
-  <h3>v6 — 主管統一決策（main 上一版）</h3>
-  <p><strong>架構變動</strong>：拆掉 4 個 Haiku 分類器、改由一個 Sonnet 主管看「全貌」一次決策。主管輸出 11 個 action 之一，分派給 executor 節點生回應。</p>
-  <p><strong>解的問題</strong></p>
-  <ul>
-    <li>v5 鬼打牆：主管看完整 history + intent_log + FAQ 全表 + KB 索引，能識別「meta 質疑」並選 suggest_ticket</li>
-    <li>同意思走不同 path：全部進主管，只有一條 code path</li>
-    <li>「我聽不懂」一級公民：新增 acknowledge_uncertainty action（誠實出口、不再硬塞分類）</li>
-    <li>邊界 case 加 action enum 一處改完，不必到處改節點</li>
-  </ul>
-  <p><strong>實測成本（10 輪 benchmark）</strong>：開 Sonnet prompt cache 後 NT$3.81 / 10 輪。</p>
-  <p><strong>v6 也踩到的新 bug</strong></p>
-  <table>
-    <tr><th>bug</th><th>實況</th></tr>
-    <tr><td>「我知道了」鬼打牆 ⭐</td><td>用戶說「好 我知道了」「OK 了 謝謝」確認語時，主管的 11 個 action 沒有對應出口、硬塞 continue_intent → 把當前 intent 主題又重答一遍。</td></tr>
-    <tr><td>evaluator 漏判 confirmed_resolved</td><td>evaluator prompt 規則「對齊 5 個範例」（問題解決了 / OK 了 / 謝謝 / 沒問題了 / 搞定）。Haiku 在 t=0 嚴格字面對齊，「我知道了 / 了解了 / 明白了」這類常見表達被判 false。</td></tr>
-    <tr><td>主管 prompt 越加越笨</td><td>邊界 case 都壓在 system prompt 裡（FAQ 全表 + KB 索引 + 規則）越加越長，Sonnet 注意力分散、混合意圖（in_scope + out_of_scope）容易判 clarify。</td></tr>
-  </table>
-
-  <h3>v7 — 流水線 + 主管混合制（current main）</h3>
-  <p><strong>架構變動</strong>：保留 v6 主管統一決策，但加回 v5 流水線當「預判」：</p>
-  <ol>
-    <li>用戶訊息進來</li>
-    <li>phase 攔截 / greeting fast-path 不變</li>
-    <li><strong>新增：</strong>跑 4 個 Haiku 流水線（entry_classifier / intent_clarity / faq_matcher / kb_indexer），把結果濃縮成「提議卡」</li>
-    <li>主管 Sonnet 看用戶這句 + 提議卡 + 完整 history + intent_log → 從 12 個 action 選 1（多了 acknowledge_confirmation）</li>
-    <li>主管可採信流水線提議、也可 override（流水線只是參考、不是命令）</li>
-    <li>executor 執行 action</li>
-    <li>evaluator 兜底（prompt 已放寬語意）</li>
-  </ol>
-  <p><strong>解的問題</strong></p>
-  <ul>
-    <li>「我知道了」鬼打牆：新增 acknowledge_confirmation action，主管直接寫禮貌回應 + 標 intent confirmed_resolved，不走 KB</li>
-    <li>evaluator 漏判：prompt 從「對齊範例」改「看語意不看字面」，新增「包括但不限於」措辭</li>
-    <li>主管多了流水線「眼線」，KB 污染 / 質疑語氣這類 case 主管能看 hint 信心值再 override</li>
-  </ul>
-  <p><strong>實測成本（10 輪 benchmark）</strong>：</p>
-  <ul>
-    <li>v7（初版，主管 system prompt 仍含 FAQ/KB 全表）：NT$4.39 / 10 輪 — 比 v6 貴 15%</li>
-    <li><strong>v7.1（current main）</strong>：NT$3.74 / 10 輪 — 比 v6 還省 2%。主管 system prompt 移除 FAQ/KB 全表（流水線權威）、命中項詳情走 hint 帶進 user prompt</li>
-  </ul>
-  <p><strong>v7.1 關鍵設計：流水線當權威。</strong>主管不再從零挑 FAQ/KB，只能採信流水線命中、或選「不走 FAQ/KB」的 action（acknowledge_*、suggest_ticket、clarify）。流水線挑錯時主管會選 acknowledge_uncertainty 請用戶澄清，不會硬挑替代 FAQ。</p>
-
-  <h3>共用參數（任何版本都讀同一份 state）</h3>
-  <table>
-    <tr><th>欄位</th><th>意義</th><th>動到誰</th></tr>
-    <tr><td>match_confidence</td><td>FAQ 比對信心 0.0–1.0；≥0.7 走 FAQ、否則走 KB</td><td>v5/v7 由 faq_matcher 寫；v6 由 manager 寫</td></tr>
-    <tr><td>ai_confidence_in_answer</td><td>AI 對答案的信心（evaluator 算的中間值，&lt;0.4 → low_confidence_count +1）</td><td>三版都由 evaluator 寫</td></tr>
-    <tr><td>intent_log[*].status</td><td>pending / in_progress / answered / confirmed_resolved</td><td>三版都由 orchestrator + evaluator 維護</td></tr>
-    <tr><td>recommended_action</td><td>主管最終決定的 action（v5 沒有此欄、由流水線分支取代）</td><td>v6/v7 主管寫</td></tr>
-    <tr><td>pipeline hint</td><td>流水線預判結果（classification / detected_intents / faq_match / kb_picks）</td><td>v7 新增、只在 manager 收得到、不存進 state</td></tr>
-  </table>
-
-  <p style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #e3e5ea; color: #6b7280; font-size: 12px;">
+<p style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #e3e5ea; color: #6b7280; font-size: 12px;">
     雛形版本 v7.1（流水線權威 + 主管最終決策 + Anthropic Prompt Caching）。
     完整技術規格見 <code>data/hiskio_cs_prototype_spec_v6.md</code>（v7 沿用 v6 結構，差異見上方版本演化區）。
   </p>
 
 </div>
+
+
+<script>
+document.querySelectorAll('.vtabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.vtabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.vpanel').forEach(p => p.classList.remove('active'));
+    const target = document.querySelector('.vpanel[data-panel="' + tab + '"]');
+    if (target) target.classList.add('active');
+  });
+});
+</script>
 
 </body>
 </html>
