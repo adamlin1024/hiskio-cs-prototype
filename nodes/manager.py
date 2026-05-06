@@ -33,6 +33,7 @@ _VALID_ACTIONS = {
     "answer_with_kb",
     "acknowledge_out_of_scope",
     "acknowledge_uncertainty",
+    "acknowledge_confirmation",
     "suggest_ticket",
     "list_pending_intents",
     "continue_intent",

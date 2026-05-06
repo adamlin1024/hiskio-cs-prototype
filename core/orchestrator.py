@@ -25,6 +25,7 @@ from __future__ import annotations
 import logging
 import re
 
+from core import pipeline
 from core.state import append_message, load_state, now_iso, save_state
 from nodes import (
     clarification_handler,
@@ -96,8 +97,11 @@ def handle_user_message(session_id: str, user_message: str) -> dict:
     if _GREETING_RE.match(user_message.strip()):
         return _handle_greeting_fast_path(state, user_message, session_id)
 
-    # 3. Manager 統一決策
-    decision = manager.decide(state, user_message)
+    # 3. v7：流水線預判（給主管當參考）
+    hint = pipeline.run(state, user_message)
+
+    # 4. Manager 統一決策（吃流水線 hint，仍保有 override 權）
+    decision = manager.decide(state, user_message, hint=hint)
     state["intent_state"]["input_classification"] = decision["recommended_action"]
     logger.info(
         "session=%s manager action=%s reason=%r summary=%r",
@@ -236,6 +240,9 @@ def _execute_action(
     if action == "acknowledge_uncertainty":
         return _execute_uncertainty(state, user_message, decision, session_id)
 
+    if action == "acknowledge_confirmation":
+        return _execute_acknowledge_confirmation(state, user_message, decision, session_id)
+
     if action == "suggest_ticket":
         return _execute_suggest_ticket(state, user_message, decision, session_id)
 
@@ -333,6 +340,34 @@ def _execute_uncertainty(state, user_message, decision, session_id) -> dict:
     msg = decision.get("clarify_message") or DEFAULT_UNCERTAINTY_MSG
     return _finalize_turn(
         state, user_message, msg, "clarification",
+        increment_turn=True, did_customer_service=False, session_id=session_id,
+    )
+
+
+def _execute_acknowledge_confirmation(state, user_message, decision, session_id) -> dict:
+    """v7：用戶說『謝謝/我知道了/OK』等確認語 → 禮貌回應、推進 intent_log。
+
+    主管在 reason_to_user 已寫好回應文字（含推進到下一個 pending intent 的引導）。
+    這裡負責：
+    - 把 current_intent 標 confirmed_resolved
+    - 重置 consecutive_unclear_count
+    - 直接吐主管寫的回應，不跑 cs_response / faq_responder
+    """
+    state["intent_state"]["consecutive_unclear_count"] = 0
+
+    # 把 current_intent 標 confirmed_resolved
+    intent = state["intent_state"]
+    current = intent.get("current_intent")
+    if current:
+        for item in intent.get("intent_log", []):
+            if item["text"] == current and item["status"] != "confirmed_resolved":
+                item["status"] = "confirmed_resolved"
+                logger.info("intent %r 標記為 confirmed_resolved（acknowledge）", current)
+                break
+
+    msg = decision.get("reason_to_user") or "不客氣！還有其他需要協助的地方嗎？"
+    return _finalize_turn(
+        state, user_message, msg, "acknowledge",
         increment_turn=True, did_customer_service=False, session_id=session_id,
     )
 
