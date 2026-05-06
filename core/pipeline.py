@@ -1,10 +1,10 @@
 """v7 流水線預判：跑流水線 4 個 Haiku 節點，產出 hint dict 給主管參考。
 
-v7 設計核心：
-- 主管仍是統一決策者（從 12 個 action 選 1）
-- 流水線預先比對 FAQ / KB，把結果濃縮成 hint
-- 主管不用自己重做 FAQ / KB 比對 → system prompt 縮短、判斷更聚焦
-- 流水線判錯時主管可 override（hint 只是「參考」不是「指令」）
+v7.1 設計（流水線當權威）：
+- 主管不再吃 FAQ 全表 + KB 索引全表
+- 流水線挑命中項 → hint 帶上完整 question_patterns / KB 標題給主管參考
+- 主管採信流水線挑的那筆，或選「不走 FAQ/KB」的 action（acknowledge_*、suggest_ticket、clarify 等）
+- 主管不再從零挑替代 FAQ/KB（信心低就請用戶澄清）
 
 不在以下情況呼叫流水線（省 token）：
 - phase 攔截（等待選擇意圖 / 工單確認 / Email / 已結束）
@@ -12,11 +12,48 @@ v7 設計核心：
 """
 from __future__ import annotations
 
+import json
 import logging
+import os
+from functools import lru_cache
+from pathlib import Path
 
 from nodes import entry_classifier, faq_matcher, intent_clarity, kb_indexer
 
 logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _load_faq_lookup() -> dict[str, dict]:
+    """faq_id → {category, question_patterns} 對照表，用來補 hint 細節。"""
+    path = Path(os.getenv("FAQ_PATH", "data/faq.json"))
+    if not path.exists():
+        return {}
+    faqs = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        f["id"]: {
+            "category": f.get("category", ""),
+            "question_patterns": f.get("question_patterns", []),
+        }
+        for f in faqs
+    }
+
+
+@lru_cache(maxsize=1)
+def _load_kb_lookup() -> dict[str, dict]:
+    """kb_id → {title, category, summary} 對照表，用來補 hint 細節。"""
+    path = Path(os.getenv("KB_INDEX_PATH", "data/kb_index.json"))
+    if not path.exists():
+        return {}
+    index = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        k["id"]: {
+            "title": k.get("title", ""),
+            "category": k.get("category", ""),
+            "summary": k.get("summary", ""),
+        }
+        for k in index
+    }
 
 
 def run(state: dict, user_message: str) -> dict:
@@ -92,7 +129,11 @@ def run(state: dict, user_message: str) -> dict:
 
 
 def format_hint_for_prompt(hint: dict) -> str:
-    """把 hint dict 序列化成給主管 prompt 看的多行文字。"""
+    """把 hint dict 序列化成給主管 prompt 看的多行文字。
+
+    v7.1：命中 FAQ / KB 時，把 question_patterns / 標題+摘要 也一起帶出來，
+    這樣主管就算沒看 FAQ/KB 全表也有足夠資訊判斷。
+    """
     if not hint:
         return "（流水線未跑）"
 
@@ -116,17 +157,35 @@ def format_hint_for_prompt(hint: dict) -> str:
     if ref_idx is not None:
         lines.append(f"- 用戶指稱詞 → 對應 intent_log[{ref_idx}]")
 
+    # FAQ 比對結果（命中時帶出 question_patterns）
     faq = hint.get("faq_match", {})
-    if faq.get("matched_id"):
+    matched_id = faq.get("matched_id")
+    if matched_id:
+        faq_info = _load_faq_lookup().get(matched_id, {})
+        patterns = "、".join(faq_info.get("question_patterns", [])[:6])
         lines.append(
-            f"- FAQ 比對：命中 {faq['matched_id']}（信心 {faq.get('confidence', 0.0):.2f}）"
+            f"- FAQ 比對：命中 {matched_id}"
+            f"（{faq_info.get('category', '?')}，信心 {faq.get('confidence', 0.0):.2f}）"
         )
+        if patterns:
+            lines.append(f"  覆蓋問法：{patterns}")
     else:
         lines.append("- FAQ 比對：未命中")
 
+    # KB 文章建議（帶出標題 + 摘要）
     kb_picks = hint.get("kb_picks", [])
     if kb_picks:
         lines.append(f"- KB 文章建議：{', '.join(kb_picks)}")
+        kb_lookup = _load_kb_lookup()
+        for kid in kb_picks:
+            info = kb_lookup.get(kid, {})
+            if info:
+                lines.append(
+                    f"  - {kid}｜{info.get('title', '')}（{info.get('category', '')}）"
+                )
+                summary = info.get("summary", "")
+                if summary:
+                    lines.append(f"    摘要：{summary}")
     else:
         lines.append("- KB 文章建議：（無）")
 

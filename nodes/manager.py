@@ -103,11 +103,10 @@ def decide(state: dict, user_message: str, hint: dict | None = None) -> dict:
     user = state["user_info"]
     sl = state["service_limits"]
 
-    # static 部分（每次都一樣，可被 prompt cache 命中）
-    system_prompt = _SYSTEM_TPL.format(
-        faq_list=_load_faq_summary(),
-        kb_index_list=_load_kb_summary(),
-    )
+    # v7.1：system prompt 不再吃 FAQ 全表 + KB 索引全表（流水線已比對完，
+    # 命中項詳情走 hint 帶進 user prompt）。system prompt 變成純規則 + JSON 格式，
+    # cache hit 後成本接近忽略。
+    system_prompt = _SYSTEM_TPL
 
     # 流水線 hint 序列化（v7 新增）
     if hint:

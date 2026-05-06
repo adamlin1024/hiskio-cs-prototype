@@ -834,7 +834,12 @@
     <li>evaluator 漏判：prompt 從「對齊範例」改「看語意不看字面」，新增「包括但不限於」措辭</li>
     <li>主管多了流水線「眼線」，KB 污染 / 質疑語氣這類 case 主管能看 hint 信心值再 override</li>
   </ul>
-  <p><strong>實測成本（10 輪 benchmark）</strong>：NT$4.39 / 10 輪（比 v6 貴 NT$0.58，多 4 次 Haiku 流水線 call）。<strong>後續優化方向</strong>：把主管 system prompt 的 FAQ 全表 + KB 索引精簡（只在 hint 不確定時才完整展示），目標壓回 v6 NT$3.81 以下。</p>
+  <p><strong>實測成本（10 輪 benchmark）</strong>：</p>
+  <ul>
+    <li>v7（初版，主管 system prompt 仍含 FAQ/KB 全表）：NT$4.39 / 10 輪 — 比 v6 貴 15%</li>
+    <li><strong>v7.1（current main）</strong>：NT$3.74 / 10 輪 — 比 v6 還省 2%。主管 system prompt 移除 FAQ/KB 全表（流水線權威）、命中項詳情走 hint 帶進 user prompt</li>
+  </ul>
+  <p><strong>v7.1 關鍵設計：流水線當權威。</strong>主管不再從零挑 FAQ/KB，只能採信流水線命中、或選「不走 FAQ/KB」的 action（acknowledge_*、suggest_ticket、clarify）。流水線挑錯時主管會選 acknowledge_uncertainty 請用戶澄清，不會硬挑替代 FAQ。</p>
 
   <h3>共用參數（任何版本都讀同一份 state）</h3>
   <table>
@@ -847,7 +852,7 @@
   </table>
 
   <p style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #e3e5ea; color: #6b7280; font-size: 12px;">
-    雛形版本 v7.0（流水線 + 主管混合制 + Anthropic Prompt Caching）。
+    雛形版本 v7.1（流水線權威 + 主管最終決策 + Anthropic Prompt Caching）。
     完整技術規格見 <code>data/hiskio_cs_prototype_spec_v6.md</code>（v7 沿用 v6 結構，差異見上方版本演化區）。
   </p>
 
