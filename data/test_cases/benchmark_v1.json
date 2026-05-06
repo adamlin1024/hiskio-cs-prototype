@@ -1,0 +1,20 @@
+{
+  "name": "v1 baseline",
+  "description": "10 輪標準情境（greeting + FAQ + 多重意圖 + 指稱詞 + 離題 + 確認）。會員身分。供 v6 / v7 跨版本 benchmark 比對。",
+  "user_type": {
+    "is_logged_in": true,
+    "user_id": "user_001"
+  },
+  "turns": [
+    "你好",
+    "我影片不能看",
+    "我有兩個問題：發票跟付款",
+    "1",
+    "下一個問題呢",
+    "我想退費",
+    "退費條件是什麼",
+    "OK 了 謝謝",
+    "你今天午餐吃什麼",
+    "再見"
+  ]
+}

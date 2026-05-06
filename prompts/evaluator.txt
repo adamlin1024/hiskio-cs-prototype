@@ -18,8 +18,11 @@ AI 回應：「{ai_response}」
   "user_confirmed_resolution": true/false
 }}
 
-特別注意 user_confirmed_resolution：
-- true：用戶**這一句**明確表達「問題解決了 / OK 了 / 謝謝 / 沒問題了 / 搞定」
+特別注意 user_confirmed_resolution（看語意，不看字面）：
+- true：用戶**這一句**的語意 = 「肯定上一輪的回答、沒有新問題、沒有反對意見」
+       常見表達（包括但不限於、新表達只要符合上述語意一律算 true）：
+       謝謝、我知道了、了解、了解了、明白、明白了、我懂了、OK、好的、清楚了、
+       沒問題了、搞定、夠了、沒事了、行了、可以了、就這樣
 - false：用戶在問新問題、表達不滿、提供補充資訊、或單純沉默
 
 只輸出 JSON。
