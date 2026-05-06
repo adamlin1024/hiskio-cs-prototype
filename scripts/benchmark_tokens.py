@@ -1,10 +1,12 @@
 """Token 消耗 benchmark 腳本。
 
-跑一個固定的 10 輪對話情境，最後印出 token 統計與估算成本。
-測試 prompt caching 之前 / 之後可以用同一個情境跑兩次比對。
+從 data/test_cases/*.json 讀對話情境，跑完印出 token 統計與成本。
+跨版本（v6 / v7）用同一份 scenario 才能對比。
 
 使用方法（本機 uvicorn 已啟動）：
-    python scripts/benchmark_tokens.py
+    python scripts/benchmark_tokens.py                     # 預設 benchmark_v1
+    python scripts/benchmark_tokens.py benchmark_v1        # 指定名稱
+    python scripts/benchmark_tokens.py path/to/case.json   # 指定路徑
 """
 from __future__ import annotations
 
@@ -12,22 +14,24 @@ import json
 import sys
 import time
 import urllib.request
+from pathlib import Path
 
 BASE_URL = "http://127.0.0.1:8765"
+TEST_CASES_DIR = Path(__file__).resolve().parent.parent / "data" / "test_cases"
 
-# 固定 10 輪測試情境（覆蓋 greeting / FAQ / 多重意圖 / 指稱詞 / 離題）
-SCENARIO = [
-    "你好",
-    "我影片不能看",
-    "我有兩個問題：發票跟付款",
-    "1",
-    "下一個問題呢",
-    "我想退費",
-    "退費條件是什麼",
-    "OK 了 謝謝",
-    "你今天午餐吃什麼",
-    "再見",
-]
+
+def load_scenario(arg: str | None) -> dict:
+    """從 data/test_cases/ 讀 JSON。預設 benchmark_v1。"""
+    name = arg or "benchmark_v1"
+    candidates = [
+        Path(name) if Path(name).is_file() else None,
+        TEST_CASES_DIR / f"{name}.json",
+        TEST_CASES_DIR / name,
+    ]
+    for p in candidates:
+        if p is not None and p.exists():
+            return json.loads(p.read_text(encoding="utf-8"))
+    raise FileNotFoundError(f"找不到 scenario：{name}（試過 {[str(c) for c in candidates if c]}）")
 
 
 def post(path: str, body: dict) -> dict:
@@ -44,22 +48,30 @@ def get(path: str) -> dict:
 
 
 def main() -> int:
+    arg = sys.argv[1] if len(sys.argv) > 1 else None
+    scenario_data = load_scenario(arg)
+    turns = scenario_data["turns"]
+    user_type = scenario_data.get("user_type", {"is_logged_in": True, "user_id": "user_001"})
+
     print("=== Token Benchmark ===")
     print(f"Base URL: {BASE_URL}")
-    print(f"Scenario: {len(SCENARIO)} turns\n")
+    print(f"Scenario: {scenario_data.get('name', '?')}（{len(turns)} turns）")
+    if scenario_data.get("description"):
+        print(f"Description: {scenario_data['description']}")
+    print()
 
     # 1. 重置 token 統計
     post("/api/admin/usage/reset", {})
     print("✓ usage 已重置")
 
-    # 2. 建會員 session
-    s = post("/api/session/new", {"is_logged_in": True, "user_id": "user_001"})
+    # 2. 建 session（依 scenario 指定的身分）
+    s = post("/api/session/new", user_type)
     sid = s["session_id"]
-    print(f"✓ 建立 session: {sid[:8]}\n")
+    print(f"✓ 建立 session: {sid[:8]}（{'會員' if user_type.get('is_logged_in') else '訪客'}）\n")
 
-    # 3. 跑 10 輪
+    # 3. 跑全部輪
     t_start = time.time()
-    for i, msg in enumerate(SCENARIO, 1):
+    for i, msg in enumerate(turns, 1):
         print(f"[{i:2d}] 用戶：{msg}")
         try:
             r = post("/api/chat", {"session_id": sid, "message": msg})
@@ -69,7 +81,7 @@ def main() -> int:
             return 1
         print()
     t_total = time.time() - t_start
-    print(f"\n總耗時：{t_total:.1f} 秒（平均 {t_total/len(SCENARIO):.2f} 秒/輪）\n")
+    print(f"\n總耗時：{t_total:.1f} 秒（平均 {t_total/len(turns):.2f} 秒/輪）\n")
 
     # 4. 印統計
     summary = get("/api/admin/usage")
@@ -89,8 +101,8 @@ def main() -> int:
             print(f"    cache_create: {b['cache_create']:,}")
         print(f"    成本: ${b['usd']:.5f}")
     print("=" * 60)
-    print(f"\n平均每輪成本：${summary['total_usd']/len(SCENARIO):.5f} USD")
-    print(f"平均每輪 LLM 次數：{summary['calls']/len(SCENARIO):.1f}")
+    print(f"\n平均每輪成本：${summary['total_usd']/len(turns):.5f} USD")
+    print(f"平均每輪 LLM 次數：{summary['calls']/len(turns):.1f}")
     return 0
 
 

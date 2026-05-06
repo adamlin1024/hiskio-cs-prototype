@@ -147,6 +147,7 @@
       <li><a href="#ticket">工單流程</a></li>
       <li><a href="#admin">後台介面</a></li>
       <li><a href="#operate">內部操作建議</a></li>
+      <li><a href="#versions">版本演化（v5 / v6 / v7）</a></li>
     </ul>
   </div>
 
@@ -184,6 +185,8 @@
   <div class="legend-row"><div class="bar" style="background:#ec4899"></div><div class="text"><strong>粉紅色 — 知識庫無解 (no_kb_match)</strong><small>KB 完全沒有相關文章，AI 誠實告知並建議建立工單。</small></div></div>
 
   <div class="legend-row"><div class="bar" style="background:#7c3aed"></div><div class="text"><strong>紫色 — 工單流程 (ticket_flow / force_escalation)</strong><small>建議建單／確認建單／收 Email／建單成功 等工單相關訊息。force_escalation 是「連續 3 次無法溝通」的強制建單。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#84cc16"></div><div class="text"><strong>草綠 — 確認語回應 (acknowledge) ⭐ v7 新增</strong><small>用戶說「謝謝」「我知道了」「OK」等確認語，主管直接回禮貌過渡語並把當前 intent 標 confirmed_resolved，不再走 KB（解 v6 鬼打牆）。</small></div></div>
 
   <div class="legend-row"><div class="bar" style="background:#dc2626"></div><div class="text"><strong>紅色 — 對話結束 (session_ended)</strong><small>工單已建立或對話結束，提示用戶按「新對話」重新開始。</small></div></div>
 
@@ -767,9 +770,85 @@
     <li>KB：把 .md 放到 <code>data/kb/</code> → 跑 <code>python scripts/build_kb_index.py</code> → 重啟 server</li>
   </ul>
 
+  <h2 id="versions">版本演化（v5 / v6 / v7）</h2>
+  <p>這個雛形經歷三個架構版本。<strong>共用基礎建設</strong>下方先列、再分版本說明各自做了什麼、解了什麼問題、踩了什麼坑。</p>
+
+  <h3>共用基礎（三版都不變）</h3>
+  <table>
+    <tr><th>面向</th><th>內容</th></tr>
+    <tr><td>State 結構</td><td>session_id / phase / turn_count / user_info / issue_context / faq_context / kb_context / service_limits / ticket_state / intent_state / escalation_signals / chat_history</td></tr>
+    <tr><td>service_limits</td><td>max_turns_per_session=20、max_off_topic_count=3、max_low_confidence_count=3、max_unresolved_count=3</td></tr>
+    <tr><td>phase 攔截</td><td>等待用戶選擇意圖 / 等待工單確認 / 等待 Email / 已結束 — 在 manager 之前優先處理</td></tr>
+    <tr><td>greeting fast-path</td><td>regex 攔下純問候，不打 LLM。greeting_count 上限 3，超過鎖灰框</td></tr>
+    <tr><td>會員/訪客識別</td><td>會員從 mock_users.json 抓 email；訪客在工單流程收 Email（regex 驗證）</td></tr>
+    <tr><td>FAQ 回應規則</td><td>核心步驟一字不漏照抄，由 faq_responder 只潤飾開頭結尾（任何版本都不准 AI 改 core_steps）</td></tr>
+    <tr><td>KB 兩層分離</td><td>data/kb_source/（原稿）→ data/kb/（系統檔）→ kb_index.json（索引），由 build_kb_index.py 產出</td></tr>
+    <tr><td>evaluator 職責</td><td>每輪 AI 回應後背景跑 Haiku，更新 issue_context、low_confidence_count、unresolved_count、intent_log status（confirmed_resolved）</td></tr>
+    <tr><td>工單流程</td><td>建議 → 確認 → 收 Email → Sonnet 生工單摘要 JSON → 寫進 SQLite tickets 表</td></tr>
+  </table>
+
+  <h3>v5 — 分類器流水線（已歸檔，branch=v5-pipeline-mode）</h3>
+  <p><strong>架構</strong>：4 個 Haiku 接力跑 → entry_classifier → intent_clarity → faq_matcher → kb_indexer → cs_response/faq_responder。每節點看自己負責的一小塊資料，輸出傳給下一個。</p>
+  <p><strong>解的問題</strong>：相比更早的 v3、把 router 拆成更精細的入口分類（greeting / unclear / off_topic / customer_service）+ 意圖明確度（simple / parallel_multiple / 指稱詞）+ 平行多意圖追蹤。</p>
+  <p><strong>踩到的 bug</strong></p>
+  <table>
+    <tr><th>bug</th><th>實況</th></tr>
+    <tr><td>「人工建單為什麼以後不能動作了」鬼打牆</td><td>entry_classifier 看到「人工建單」字眼歸 customer_service → kb_indexer 被歷史污染挑 kb_005（發票）→ cs_response 拿到 KB 全文回「請問您的發票問題是哪方面...」。沒有任何節點看出用戶在質疑系統。</td></tr>
+    <tr><td>同樣意思走不同 path 結果不一致</td><td>選號「3」走 phase 攔截、陳述句「我有水果問題」走 entry_classifier，兩條路結果不一樣。</td></tr>
+    <tr><td>ticket_state.declined 永久封印</td><td>用戶拒絕一次工單後、之後新意圖也不再被建議建單。</td></tr>
+    <tr><td>邊界 case 永遠補不完</td><td>新訊號（meta 質疑、「我聽不懂」、混合 in/out scope）要在 entry_classifier、faq_matcher、kb_indexer、cs_response 都加分支。</td></tr>
+  </table>
+
+  <h3>v6 — 主管統一決策（main 上一版）</h3>
+  <p><strong>架構變動</strong>：拆掉 4 個 Haiku 分類器、改由一個 Sonnet 主管看「全貌」一次決策。主管輸出 11 個 action 之一，分派給 executor 節點生回應。</p>
+  <p><strong>解的問題</strong></p>
+  <ul>
+    <li>v5 鬼打牆：主管看完整 history + intent_log + FAQ 全表 + KB 索引，能識別「meta 質疑」並選 suggest_ticket</li>
+    <li>同意思走不同 path：全部進主管，只有一條 code path</li>
+    <li>「我聽不懂」一級公民：新增 acknowledge_uncertainty action（誠實出口、不再硬塞分類）</li>
+    <li>邊界 case 加 action enum 一處改完，不必到處改節點</li>
+  </ul>
+  <p><strong>實測成本（10 輪 benchmark）</strong>：開 Sonnet prompt cache 後 NT$3.81 / 10 輪。</p>
+  <p><strong>v6 也踩到的新 bug</strong></p>
+  <table>
+    <tr><th>bug</th><th>實況</th></tr>
+    <tr><td>「我知道了」鬼打牆 ⭐</td><td>用戶說「好 我知道了」「OK 了 謝謝」確認語時，主管的 11 個 action 沒有對應出口、硬塞 continue_intent → 把當前 intent 主題又重答一遍。</td></tr>
+    <tr><td>evaluator 漏判 confirmed_resolved</td><td>evaluator prompt 規則「對齊 5 個範例」（問題解決了 / OK 了 / 謝謝 / 沒問題了 / 搞定）。Haiku 在 t=0 嚴格字面對齊，「我知道了 / 了解了 / 明白了」這類常見表達被判 false。</td></tr>
+    <tr><td>主管 prompt 越加越笨</td><td>邊界 case 都壓在 system prompt 裡（FAQ 全表 + KB 索引 + 規則）越加越長，Sonnet 注意力分散、混合意圖（in_scope + out_of_scope）容易判 clarify。</td></tr>
+  </table>
+
+  <h3>v7 — 流水線 + 主管混合制（current main）</h3>
+  <p><strong>架構變動</strong>：保留 v6 主管統一決策，但加回 v5 流水線當「預判」：</p>
+  <ol>
+    <li>用戶訊息進來</li>
+    <li>phase 攔截 / greeting fast-path 不變</li>
+    <li><strong>新增：</strong>跑 4 個 Haiku 流水線（entry_classifier / intent_clarity / faq_matcher / kb_indexer），把結果濃縮成「提議卡」</li>
+    <li>主管 Sonnet 看用戶這句 + 提議卡 + 完整 history + intent_log → 從 12 個 action 選 1（多了 acknowledge_confirmation）</li>
+    <li>主管可採信流水線提議、也可 override（流水線只是參考、不是命令）</li>
+    <li>executor 執行 action</li>
+    <li>evaluator 兜底（prompt 已放寬語意）</li>
+  </ol>
+  <p><strong>解的問題</strong></p>
+  <ul>
+    <li>「我知道了」鬼打牆：新增 acknowledge_confirmation action，主管直接寫禮貌回應 + 標 intent confirmed_resolved，不走 KB</li>
+    <li>evaluator 漏判：prompt 從「對齊範例」改「看語意不看字面」，新增「包括但不限於」措辭</li>
+    <li>主管多了流水線「眼線」，KB 污染 / 質疑語氣這類 case 主管能看 hint 信心值再 override</li>
+  </ul>
+  <p><strong>實測成本（10 輪 benchmark）</strong>：NT$4.39 / 10 輪（比 v6 貴 NT$0.58，多 4 次 Haiku 流水線 call）。<strong>後續優化方向</strong>：把主管 system prompt 的 FAQ 全表 + KB 索引精簡（只在 hint 不確定時才完整展示），目標壓回 v6 NT$3.81 以下。</p>
+
+  <h3>共用參數（任何版本都讀同一份 state）</h3>
+  <table>
+    <tr><th>欄位</th><th>意義</th><th>動到誰</th></tr>
+    <tr><td>match_confidence</td><td>FAQ 比對信心 0.0–1.0；≥0.7 走 FAQ、否則走 KB</td><td>v5/v7 由 faq_matcher 寫；v6 由 manager 寫</td></tr>
+    <tr><td>ai_confidence_in_answer</td><td>AI 對答案的信心（evaluator 算的中間值，&lt;0.4 → low_confidence_count +1）</td><td>三版都由 evaluator 寫</td></tr>
+    <tr><td>intent_log[*].status</td><td>pending / in_progress / answered / confirmed_resolved</td><td>三版都由 orchestrator + evaluator 維護</td></tr>
+    <tr><td>recommended_action</td><td>主管最終決定的 action（v5 沒有此欄、由流水線分支取代）</td><td>v6/v7 主管寫</td></tr>
+    <tr><td>pipeline hint</td><td>流水線預判結果（classification / detected_intents / faq_match / kb_picks）</td><td>v7 新增、只在 manager 收得到、不存進 state</td></tr>
+  </table>
+
   <p style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #e3e5ea; color: #6b7280; font-size: 12px;">
-    雛形版本 v6.2（主管模式 + Anthropic Prompt Caching）。
-    完整技術規格見 <code>data/hiskio_cs_prototype_spec_v6.md</code>。
+    雛形版本 v7.0（流水線 + 主管混合制 + Anthropic Prompt Caching）。
+    完整技術規格見 <code>data/hiskio_cs_prototype_spec_v6.md</code>（v7 沿用 v6 結構，差異見上方版本演化區）。
   </p>
 
 </div>
