@@ -28,6 +28,7 @@ import re
 from core import pipeline
 from core.state import append_message, load_state, now_iso, save_state
 from nodes import (
+    acknowledge_handler,
     clarification_handler,
     cs_response,
     evaluator,
@@ -345,17 +346,17 @@ def _execute_uncertainty(state, user_message, decision, session_id) -> dict:
 
 
 def _execute_acknowledge_confirmation(state, user_message, decision, session_id) -> dict:
-    """v7：用戶說『謝謝/我知道了/OK』等確認語 → 禮貌回應、推進 intent_log。
+    """v7.2：用戶說『謝謝/我知道了/OK』等確認語 → Haiku handler 生回應、推進 intent_log。
 
-    主管在 reason_to_user 已寫好回應文字（含推進到下一個 pending intent 的引導）。
-    這裡負責：
-    - 把 current_intent 標 confirmed_resolved
+    流程：
+    - 先把 current_intent 標 confirmed_resolved（讓 handler 看到正確的 intent_log）
+    - 呼叫 acknowledge_handler.respond()（Haiku）讀 intent_log 自動推進到下一個 pending
     - 重置 consecutive_unclear_count
-    - 直接吐主管寫的回應，不跑 cs_response / faq_responder
+    - 主管的 reason_to_user 不再使用（v7.1 後改由 Haiku 寫，主管只寫 debug 短理由）
     """
     state["intent_state"]["consecutive_unclear_count"] = 0
 
-    # 把 current_intent 標 confirmed_resolved
+    # 先把 current_intent 標 confirmed_resolved
     intent = state["intent_state"]
     current = intent.get("current_intent")
     if current:
@@ -365,7 +366,8 @@ def _execute_acknowledge_confirmation(state, user_message, decision, session_id)
                 logger.info("intent %r 標記為 confirmed_resolved（acknowledge）", current)
                 break
 
-    msg = decision.get("reason_to_user") or "不客氣！還有其他需要協助的地方嗎？"
+    # Haiku handler 生回應（讀更新後的 intent_log 自動推進到下一個 pending）
+    msg = acknowledge_handler.respond(state, user_message)
     return _finalize_turn(
         state, user_message, msg, "acknowledge",
         increment_turn=True, did_customer_service=False, session_id=session_id,

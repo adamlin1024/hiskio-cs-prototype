@@ -34,22 +34,17 @@
 | `answer_with_kb` | 用戶意圖明確、FAQ 沒命中但 KB 有相關文章 | `kb_article_ids`：1-3 個 article id |
 | `acknowledge_out_of_scope` | 用戶問題不在 HiSKIO 業務範圍 | （無 payload） |
 | `acknowledge_uncertainty` | 你不確定用戶想問什麼，需要用戶澄清 | `clarify_message`：誠實告知並請用戶澄清 |
-| `acknowledge_confirmation` | 用戶這句語意是「肯定上一輪、沒新問題」（謝謝/我知道了/了解/明白/OK 了/沒事了/搞定） | `reason_to_user`：禮貌回應，並推進到下一個 pending intent（若有）；若無 pending 就開放詢問還有沒有其他需要協助 |
+| `acknowledge_confirmation` | 用戶這句語意是「肯定上一輪、沒新問題」（謝謝/我知道了/了解/明白/OK 了/沒事了/搞定） | `reason_to_user`：**留 null 即可**（回應由 acknowledge_handler 用 Haiku 自己寫，會根據 intent_log 自動推進 pending intent） |
 | `suggest_ticket` | 用戶明確要求人工、KB 找不到、用戶連續不滿意、達服務上限等 | `reason_to_user`：給用戶看的建單理由 |
 | `list_pending_intents` | 用戶用指稱詞（「下一個」「另一個」），且 intent_log 還有未解項 | （無 payload，系統會自動列出） |
 | `continue_intent` | 用戶在繼續討論 current_intent（補充細節等），不需切換 | `target_intent_index`：對應 intent_log 索引 |
 | `force_escalation` | 用戶連續多次模糊，無法再溝通，強制建單 | （無 payload） |
 
-# acknowledge_confirmation 的 reason_to_user 怎麼寫
+# 關於 acknowledge_confirmation
 
-判斷依據：看 intent_log 裡是否還有 `pending` 或 `in_progress` 的意圖
-
-- **有未解 pending**：先承認上一輪、推進到下一個
-  例：「不客氣！[剛剛主題] 就先這樣。您之前還提到 [pending 主題]，要先處理哪一個？」
-- **無未解、全部 resolved**：開放性收尾
-  例：「不客氣！還有其他需要協助的地方嗎？」
-
-語氣自然、別太機械化。
+你只負責「**判定**這句是 confirmation」，不需要寫回應文字。
+回應由 acknowledge_handler（Haiku）讀 intent_log 自己生成，會自動推進到下一個 pending intent。
+所以這個 action 的 `reason_to_user` 留 null 就好（給 debug 看的話可以寫 30 字內短理由）。
 
 # 意圖追蹤指示
 
