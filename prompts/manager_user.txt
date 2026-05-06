@@ -19,3 +19,6 @@
 - 累計未解決次數：{unresolved_count}
 - 工單建議過：{ticket_suggested}
 - 用戶曾拒絕建單：{user_declined_ticket}
+
+# 流水線預判結果（參考用，可 override）
+{pipeline_hint}

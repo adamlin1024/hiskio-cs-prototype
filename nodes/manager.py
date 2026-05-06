@@ -91,8 +91,11 @@ def _format_intent_log(intent_log: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def decide(state: dict, user_message: str) -> dict:
+def decide(state: dict, user_message: str, hint: dict | None = None) -> dict:
     """呼叫主管做決策，回傳結構化 action JSON。
+
+    v7：可選帶入 hint（流水線預判結果），主管會把 hint 當作參考但保有 override 權。
+    若不帶 hint（v6 模式），會在 prompt 中註明「流水線未跑」。
 
     解析失敗時 fallback 為 acknowledge_uncertainty，避免讓系統卡住。
     """
@@ -104,6 +107,13 @@ def decide(state: dict, user_message: str) -> dict:
         faq_list=_load_faq_summary(),
         kb_index_list=_load_kb_summary(),
     )
+
+    # 流水線 hint 序列化（v7 新增）
+    if hint:
+        from core.pipeline import format_hint_for_prompt
+        hint_str = format_hint_for_prompt(hint)
+    else:
+        hint_str = "（流水線未跑，請依完整對話與意圖紀錄判斷）"
 
     # dynamic 部分（每輪變動）
     user_prompt = _USER_TPL.format(
@@ -120,6 +130,7 @@ def decide(state: dict, user_message: str) -> dict:
         unresolved_count=sl["unresolved_count"],
         ticket_suggested=state["ticket_state"]["ticket_suggested"],
         user_declined_ticket=(state["ticket_state"]["user_decision"] == "declined"),
+        pipeline_hint=hint_str,
     )
 
     # 可由 env var MANAGER_MODEL 切換 sonnet（預設）/ haiku，方便 benchmark 比對
