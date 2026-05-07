@@ -1,10 +1,12 @@
-"""FastAPI 主程式（Phase 1-4）。
+"""FastAPI 主程式（v7.2）。
 
-端點：
+對外路由（只開 3 個 HTML 入口、其餘是 API）：
+- GET  /                       對話介面
+- GET  /admin                  後台
+- GET  /docs/guide             產品說明
 - POST /api/session/new        新建 session（會員/訪客）
 - POST /api/chat               送訊息、拿回應
 - POST /api/ticket/create      用戶按下「建立工單」按鈕觸發
-- GET  /                       靜態前端 index.html
 
 啟動：
     uvicorn app:app --reload --port 8765
@@ -19,7 +21,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 load_dotenv()
@@ -241,4 +242,5 @@ def update_ticket_status(ticket_id: int, req: TicketStatusReq):
     return {"ticket_id": ticket_id, "status": req.status}
 
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# v7.2 移除 /static mount：三份 HTML 都 self-contained，沒有 /static/* 對外資源需求。
+# 對外只暴露三個明確入口：/、/admin、/docs/guide
