@@ -1,5 +1,9 @@
 # Chatbot — HiSKIO AI 客服雛形
 
+> **繼承**：全域 `~/.claude/CLAUDE.md` ＋ `Adam_lab/CLAUDE.md` ＋ `Adam_lab/CONVENTIONS.md`。通用規則（白話文、第一性原理、開發紀律、UI／體驗慣例）一律沿用上層，**本檔不重抄**。
+> **棧別**：小工具／原型（Python FastAPI + SQLite + Claude）
+> 本檔只放本專案特有的穩定規則；**不列資料夾現有內容**（看現況）、**不堆歷史進度**（進規格文件）。
+
 ## 專案說明
 本地可跑的 AI 客服雛形，三段式流程：FAQ 快查 → RAG → 工單建立。
 - 完整規格書：`data/hiskio_cs_prototype_spec_v6.md`（最新版）
