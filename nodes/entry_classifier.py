@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 
-from core.llm_client import call_haiku, load_prompt
+from core.llm_client import call_fast, load_prompt
 from core.text_utils import format_recent_history
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ def classify(state: dict, user_message: str) -> str:
         consecutive_unclear_count=state["intent_state"]["consecutive_unclear_count"],
         user_message=user_message,
     )
-    raw = call_haiku(prompt, max_tokens=10, temperature=0.0, fallback="customer_service")
+    raw = call_fast(prompt, max_tokens=10, temperature=0.0, fallback="customer_service")
     if not raw:
         return "customer_service"
     token = raw.strip().split()[0].lower().strip(".,!?'\"")

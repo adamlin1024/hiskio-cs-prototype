@@ -1,0 +1,50 @@
+# HiBot 模型分派設定
+# ─────────────────────────────────────────────────────────────
+# 改這個檔就能換模型／改分派，程式碼不用動。改完重啟 server 生效。
+# 金鑰(API key)不寫在這裡，只寫「環境變數名」；真正的金鑰放 .env。
+#
+# 預設值 = 目前線上行為（reasoning→Sonnet、fast→Haiku，都走 Claude 原廠）。
+
+# ── 供應商定義 ──────────────────────────────────────────────
+[providers.anthropic]
+type        = "anthropic"
+api_key_env = "ANTHROPIC_API_KEY"
+
+[providers.openrouter]
+type        = "openai_compat"
+base_url    = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+
+# 想直連 OpenAI 官方時可解除下面註解：
+# [providers.openai]
+# type        = "openai_compat"
+# base_url    = "https://api.openai.com/v1"
+# api_key_env = "OPENAI_API_KEY"
+
+# ── 等級 → 用哪個供應商的哪個模型 ───────────────────────────
+[roles.reasoning]   # 聰明檔：主對話 / 推理 / 工單摘要
+provider = "anthropic"
+model    = "claude-sonnet-4-6"
+
+[roles.fast]        # 快省檔：路由 / 分類 / 抽取 / 判斷離題 …
+provider = "anthropic"
+model    = "claude-haiku-4-5-20251001"
+
+# 範例：把聰明檔換成走 OpenRouter 的 GPT，只要改成
+#   provider = "openrouter"
+#   model    = "openai/gpt-5"
+
+# ── 價目表（USD / 百萬 token）─────────────────────────────
+# 給「供應商沒回傳實際費用」的模型算成本用（例如直連 Anthropic）。
+# 走 OpenRouter 時通常會回傳真實費用，會優先採用、不看這張表。
+[pricing."claude-sonnet-4-6"]
+input        = 3.0
+output       = 15.0
+cache_read   = 0.30
+cache_create = 3.75
+
+[pricing."claude-haiku-4-5-20251001"]
+input        = 0.80
+output       = 4.0
+cache_read   = 0.08
+cache_create = 1.0

@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from core.llm_client import call_haiku  # noqa: E402
+from core.llm_client import call_fast  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -112,7 +112,7 @@ def main() -> int:
         logger.info("處理 %s（%s）", article_id, title)
 
         prompt = PROMPT.format(title=title, category=category, body=body[:4000])
-        raw = call_haiku(prompt, max_tokens=400, temperature=0.0, fallback="")
+        raw = call_fast(prompt, max_tokens=400, temperature=0.0, fallback="")
         summary = ""
         key_questions: list[str] = []
         data = _extract_json(raw)

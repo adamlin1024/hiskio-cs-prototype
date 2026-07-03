@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from core.llm_client import call_haiku, load_prompt
+from core.llm_client import call_fast, load_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -27,4 +27,4 @@ def respond(state: dict, user_message: str) -> str:
     )
 
     fallback = "這個問題不在 HiSKIO 客服範圍內喔，如果有課程或帳號相關的問題我都可以協助您。"
-    return call_haiku(prompt, max_tokens=200, temperature=0.6, fallback=fallback)
+    return call_fast(prompt, max_tokens=200, temperature=0.6, fallback=fallback)

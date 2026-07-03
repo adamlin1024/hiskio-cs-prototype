@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from core.llm_client import call_haiku, load_prompt
+from core.llm_client import call_fast, load_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -31,4 +31,4 @@ def respond(state: dict, user_message: str) -> str:
             "4. 其他\n"
             "請回覆數字或簡單說明。"
         )
-    return call_haiku(prompt, max_tokens=300, temperature=0.4, fallback=fallback)
+    return call_fast(prompt, max_tokens=300, temperature=0.4, fallback=fallback)

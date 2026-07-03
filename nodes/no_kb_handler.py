@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from core.llm_client import call_haiku, load_prompt
+from core.llm_client import call_fast, load_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -29,4 +29,4 @@ def respond(state: dict, user_message: str) -> str:
         "這個問題我們的知識庫目前沒有對應資訊，建議為您建立工單，"
         "由客服團隊直接協助處理。請按下方按鈕或回覆「好」確認建立。"
     )
-    return call_haiku(prompt, max_tokens=200, temperature=0.4, fallback=fallback)
+    return call_fast(prompt, max_tokens=200, temperature=0.4, fallback=fallback)

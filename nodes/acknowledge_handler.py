@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 
-from core.llm_client import call_haiku, load_prompt
+from core.llm_client import call_fast, load_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ def respond(state: dict, user_message: str) -> str:
     )
 
     fallback = "不客氣！還有其他需要協助的地方嗎？"
-    return call_haiku(
+    return call_fast(
         prompt,
         max_tokens=200,
         temperature=0.5,  # 比 0 高一點讓語氣自然，但不要太發散

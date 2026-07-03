@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 
-from core.llm_client import call_haiku, load_prompt
+from core.llm_client import call_fast, load_prompt
 from core.text_utils import extract_json_object
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ def evaluate(state: dict, user_message: str, ai_response: str) -> None:
         previous_category=state["issue_context"].get("category") or "未分類",
         turn_count=state["turn_count"],
     )
-    raw = call_haiku(prompt, max_tokens=300, temperature=0.0, fallback="")
+    raw = call_fast(prompt, max_tokens=300, temperature=0.0, fallback="")
     result = extract_json_object(raw)
     if not result:
         logger.warning("evaluator 解析失敗，原始輸出：%r", raw)

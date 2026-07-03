@@ -14,7 +14,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from core.llm_client import call_haiku, load_prompt
+from core.llm_client import call_fast, load_prompt
 from core.text_utils import extract_json_object
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ def match(user_message: str) -> dict:
         faq_list=_format_faq_for_prompt(faqs),
         user_message=user_message,
     )
-    raw = call_haiku(prompt, max_tokens=100, temperature=0.0, fallback="")
+    raw = call_fast(prompt, max_tokens=100, temperature=0.0, fallback="")
     parsed = extract_json_object(raw)
     if parsed is None:
         logger.warning("faq_matcher 解析失敗：%r", raw[:200])

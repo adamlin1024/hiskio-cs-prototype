@@ -9,7 +9,7 @@ import json
 import logging
 from typing import Any
 
-from core.llm_client import call_sonnet, load_prompt
+from core.llm_client import call_reasoning, load_prompt
 from core.state import _connect, now_iso  # noqa: SLF001 — 內部模組共用 connection helper
 from core.text_utils import extract_json_object
 
@@ -31,7 +31,7 @@ def _format_chat_history(history: list[dict]) -> str:
 def generate_summary(state: dict) -> dict[str, Any]:
     """用 Sonnet 從 chat_history 產出摘要欄位。失敗時回傳 fallback。"""
     prompt = _PROMPT.format(full_chat_history=_format_chat_history(state["chat_history"]))
-    raw = call_sonnet(prompt, max_tokens=400, temperature=0.2, fallback="")
+    raw = call_reasoning(prompt, max_tokens=400, temperature=0.2, fallback="")
     parsed = extract_json_object(raw)
     if parsed is None:
         logger.warning("ticket summary 解析失敗，使用 fallback。raw=%r", raw[:200])

@@ -11,7 +11,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from core.llm_client import call_haiku, load_prompt
+from core.llm_client import call_fast, load_prompt
 from core.text_utils import extract_json_array, format_recent_history
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ def index_articles(state: dict, user_message: str, max_articles: int = 3) -> lis
         recent_history=format_recent_history(state["chat_history"]),
     )
 
-    raw = call_haiku(prompt, max_tokens=100, temperature=0.0, fallback="[]")
+    raw = call_fast(prompt, max_tokens=100, temperature=0.0, fallback="[]")
     data = extract_json_array(raw) or []
     valid_ids = {item["id"] for item in kb_index}
     return [str(x) for x in data if isinstance(x, str) and x in valid_ids][:max_articles]

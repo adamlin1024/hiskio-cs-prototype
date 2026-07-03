@@ -16,7 +16,7 @@ import logging
 import re
 
 from core import ticket
-from core.llm_client import call_haiku
+from core.llm_client import call_fast
 from core.state import append_message, now_iso, save_state
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,7 @@ _DECLINED_MESSAGE = "了解，那就先不建立工單。如果之後還有需�
 
 def decide(user_message: str) -> str:
     """回傳 'Y' / 'N' / 'U'。給 orchestrator 用。"""
-    raw = call_haiku(
+    raw = call_fast(
         _DECISION_PROMPT.format(user_message=user_message),
         max_tokens=5,
         temperature=0.0,

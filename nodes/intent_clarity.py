@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 
-from core.llm_client import call_haiku, load_prompt
+from core.llm_client import call_fast, load_prompt
 from core.text_utils import extract_json_object, format_recent_history
 
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ def analyze(state: dict, user_message: str) -> dict:
         recent_history=format_recent_history(state["chat_history"]),
         intent_log_str=_format_intent_log(intent_log),
     )
-    raw = call_haiku(prompt, max_tokens=400, temperature=0.0, fallback="")
+    raw = call_fast(prompt, max_tokens=400, temperature=0.0, fallback="")
     parsed = extract_json_object(raw)
 
     fallback = {

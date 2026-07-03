@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from core.llm_client import call_haiku
+from core.llm_client import call_fast
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def parse_selection(state: dict, user_message: str) -> int | None:
         for display_no, idx in enumerate(indices, 1)
     )
     prompt = _SELECTION_PROMPT.format(options_list=options_str, user_message=user_message)
-    raw = call_haiku(prompt, max_tokens=5, temperature=0.0, fallback="N")
+    raw = call_fast(prompt, max_tokens=5, temperature=0.0, fallback="N")
     if not raw:
         return None
     token = raw.strip().upper()

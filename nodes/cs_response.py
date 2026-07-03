@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-from core.llm_client import call_sonnet, load_prompt
+from core.llm_client import call_reasoning, load_prompt
 from core.text_utils import format_recent_history
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ def respond(state: dict, kb_articles: list[dict], user_message: str) -> str:
     )
 
     fallback = "抱歉，目前系統有點忙不過來，請稍後再試或考慮建立工單由客服跟進。"
-    return call_sonnet(
+    return call_reasoning(
         user_prompt,
         max_tokens=600,
         temperature=0.6,

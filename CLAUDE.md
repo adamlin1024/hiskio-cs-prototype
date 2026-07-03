@@ -1,7 +1,7 @@
 # Chatbot — HiSKIO AI 客服雛形
 
 > **繼承**：全域 `~/.claude/CLAUDE.md` ＋ `Adam_lab/CLAUDE.md` ＋ `Adam_lab/CONVENTIONS.md`。通用規則（白話文、第一性原理、開發紀律、UI／體驗慣例）一律沿用上層，**本檔不重抄**。
-> **棧別**：小工具／原型（Python FastAPI + SQLite + Claude）
+> **棧別**：小工具／原型（Python FastAPI + SQLite + 可插拔模型層）
 > 本檔只放本專案特有的穩定規則；**不列資料夾現有內容**（看現況）、**不堆歷史進度**（進規格文件）。
 
 ## 專案說明
@@ -10,10 +10,14 @@
 - 歷史紀錄：`HISTORY.md`
 
 ## 技術選型
-Python 3.11 + FastAPI + SQLite + Anthropic Claude（不接其他 LLM 服務）。
-模型分工：
-- **Sonnet**（`claude-sonnet-4-6`）— 對話、推理、生成工單摘要
-- **Haiku**（`claude-haiku-4-5-20251001`）— 路由、分類、JSON 結構化抽取、FAQ 比對、KB 索引、評估
+Python 3.11 + FastAPI + SQLite + **模型無關 LLM 層**（可插拔：直連 Anthropic 原廠、或走 OpenRouter 接各家模型）。
+- 呼叫收斂：`core/llm_client.py`（門面）→ `core/model_config.py`（等級解析）→ `core/llm_providers.py`（各家 provider）。
+- 「哪個等級用哪個模型」在 `config/models.toml` 設定；金鑰放 `.env`。改設定檔即可換模型，程式碼不動。
+- 等級（roles）：
+  - **reasoning**（聰明檔）— 對話、推理、生成工單摘要
+  - **fast**（快省檔）— 路由、分類、JSON 結構化抽取、FAQ 比對、KB 索引、評估
+- 節點呼叫 `call_reasoning()` / `call_fast()`（已移除 call_sonnet/call_haiku）。
+- 設計文件：`data/design-model-agnostic-llm-2026-07-03.md`。
 
 ## 知識庫更新
 

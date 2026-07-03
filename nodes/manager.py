@@ -18,7 +18,7 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from core.llm_client import call_haiku, call_sonnet, load_prompt
+from core.llm_client import call_fast, call_reasoning, load_prompt
 from core.text_utils import extract_json_object, format_recent_history
 
 logger = logging.getLogger(__name__)
@@ -133,8 +133,8 @@ def decide(state: dict, user_message: str, hint: dict | None = None) -> dict:
         pipeline_hint=hint_str,
     )
 
-    # 可由 env var MANAGER_MODEL 切換 sonnet（預設）/ haiku，方便 benchmark 比對
-    caller = call_haiku if os.getenv("MANAGER_MODEL", "sonnet").lower() == "haiku" else call_sonnet
+    # 可由 env var MANAGER_ROLE 切換 reasoning（預設）/ fast，方便 benchmark 比對
+    caller = call_fast if os.getenv("MANAGER_ROLE", "reasoning").lower() == "fast" else call_reasoning
     raw = caller(
         user_prompt,
         max_tokens=600,
