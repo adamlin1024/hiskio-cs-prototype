@@ -110,12 +110,16 @@ class OpenAICompatProvider(LLMProvider):
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
-        resp = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        create_kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        if self._cost_from_response:
+            # OpenRouter 需明確要求(usage.include)才會回傳實際費用；否則 usage.cost 不存在。
+            create_kwargs["extra_body"] = {"usage": {"include": True}}
+        resp = client.chat.completions.create(**create_kwargs)
         choice = resp.choices[0]
         text = (getattr(choice.message, "content", "") or "").strip()
         usage = getattr(resp, "usage", None)

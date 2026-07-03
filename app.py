@@ -40,6 +40,15 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 def _startup() -> None:
     init_db()
     logger.info("DB 已初始化：%s", os.getenv("DB_PATH", "data/prototype.db"))
+    # 開機即驗證模型設定：設定檔壞掉/等級解析不出來 → 直接讓服務起不來（大聲失敗），
+    # 而不是等線上請求才 500。設定正確時線上請求都能正常解析。
+    from core.model_config import validate_model_config
+    try:
+        validate_model_config()
+        logger.info("模型設定 config/models.toml 驗證通過")
+    except Exception as e:
+        logger.error("模型設定 config/models.toml 有問題，服務不啟動：%s", e)
+        raise
 
 
 class NewSessionReq(BaseModel):

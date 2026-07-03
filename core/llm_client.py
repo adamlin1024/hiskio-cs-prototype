@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import logging
+from collections import deque
 from pathlib import Path
 
 from core.model_config import get_registry
@@ -19,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 # 用量統計（記憶體 buffer，給 benchmark 與後台 dashboard 用）
 # 每筆：{provider, model, role, input, output, cache_read, cache_create, cost_usd}
-_usage_log: list[dict] = []
+# 有上限：避免長時間執行記憶體無限成長（超過上限自動丟最舊的）。
+_USAGE_LOG_MAXLEN = 50000
+_usage_log: "deque[dict]" = deque(maxlen=_USAGE_LOG_MAXLEN)
 
 
 def reset_usage() -> None:
@@ -60,6 +63,11 @@ def get_usage_summary(*, registry=None) -> dict:
         else:
             bucket["usd"] += cost
             summary["total_usd"] += cost
+
+    # 標示總金額是否完整：有任何模型算不出價 → total_usd 是低估值，需明確告知消費端。
+    unknown = [m for m, b in summary["by_model"].items() if not b["cost_known"]]
+    summary["unknown_models"] = unknown
+    summary["cost_complete"] = len(unknown) == 0
     return summary
 
 
@@ -75,10 +83,12 @@ def call_role(
     registry=None,
 ) -> str:
     """依「等級」呼叫模型，失敗時記 log 並回傳 fallback 字串。"""
-    reg = registry or get_registry()
-    # 等級/設定解析在 try 外：設定寫錯要明顯報錯，不被 fallback 吃掉。
-    provider, model = reg.provider_for_role(role)
+    # 全程納入防護：設定/等級解析與呼叫都可能出錯，對外請求一律優雅退化回 fallback。
+    # 設定寫錯的「大聲報錯」改由 app 啟動時 validate_model_config 負責，
+    # 在開機階段就擋下壞設定，不讓它流到線上請求（見 app.py startup）。
     try:
+        reg = registry or get_registry()
+        provider, model = reg.provider_for_role(role)
         resp = provider.complete(
             model=model,
             prompt=prompt,
@@ -87,9 +97,8 @@ def call_role(
             system=system,
             cache_system=cache_system,
         )
-    except Exception as e:  # 只吃「呼叫當下」的錯（API 逾時、額度…）→ 優雅退化
-        logger.exception("呼叫模型失敗 (role=%s, provider=%s, model=%s): %s",
-                         role, provider.name, model, e)
+    except Exception as e:
+        logger.exception("呼叫模型失敗 (role=%s): %s", role, e)
         return fallback
 
     _usage_log.append({

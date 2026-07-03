@@ -17,9 +17,10 @@ api_key_env = "OPENROUTER_API_KEY"
 
 # 想直連 OpenAI 官方時可解除下面註解：
 # [providers.openai]
-# type        = "openai_compat"
-# base_url    = "https://api.openai.com/v1"
-# api_key_env = "OPENAI_API_KEY"
+# type              = "openai_compat"
+# base_url          = "https://api.openai.com/v1"
+# api_key_env       = "OPENAI_API_KEY"
+# cost_from_response = false   # 直連 OpenAI 官方建議設 false（不支援 OpenRouter 的 usage.include）
 
 # ── 等級 → 用哪個供應商的哪個模型 ───────────────────────────
 [roles.reasoning]   # 聰明檔：主對話 / 推理 / 工單摘要

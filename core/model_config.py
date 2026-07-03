@@ -51,6 +51,8 @@ def build_provider(provider_name: str, config: dict) -> LLMProvider:
             base_url=spec["base_url"],
             api_key=api_key,
             name=provider_name,
+            # 直連 OpenAI 官方等不支援 usage.include 的端點，可在設定檔設 cost_from_response=false。
+            cost_from_response=spec.get("cost_from_response", True),
         )
     raise ValueError(f"未知的 provider type: {ptype}")
 
@@ -95,3 +97,18 @@ def reset_registry() -> None:
     """設定檔改動後呼叫，強制下次重新載入。"""
     global _default_registry
     _default_registry = None
+
+
+def validate_model_config(registry=None) -> "ModelRegistry":
+    """啟動時檢查：設定檔可載入、且每個 [roles.*] 等級都解析得出 provider+model。
+
+    設計成「壞掉就大聲丟錯」——由 app 啟動時呼叫，讓壞設定在開機階段就被擋下、
+    不會流到線上請求（線上請求端另有 try/except 退化為 fallback，見 llm_client.call_role）。
+    """
+    reg = registry or get_registry()
+    roles = list(reg.config.get("roles", {}).keys())
+    if not roles:
+        raise ValueError("config/models.toml 未定義任何 [roles.*] 等級")
+    for role in roles:
+        reg.provider_for_role(role)  # 解析不出來（未知 provider、缺 base_url…）會丟錯
+    return reg
