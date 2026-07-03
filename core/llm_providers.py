@@ -37,10 +37,11 @@ class AnthropicNativeProvider(LLMProvider):
     """直連 Anthropic 原廠（保留 prompt caching 折扣）。"""
 
     def __init__(self, *, api_key: str | None = None, client: Any = None,
-                 name: str = "anthropic"):
+                 name: str = "anthropic", timeout: float | None = None):
         self.name = name
         self._api_key = api_key
         self._client = client
+        self._timeout = timeout
 
     def _get_client(self):
         if self._client is None:
@@ -66,6 +67,8 @@ class AnthropicNativeProvider(LLMProvider):
                 }]
             else:
                 kwargs["system"] = system
+        if self._timeout is not None and self._timeout > 0:
+            kwargs["timeout"] = self._timeout
         resp = client.messages.create(**kwargs)
         text = "".join(
             b.text for b in resp.content if getattr(b, "type", None) == "text"
@@ -90,12 +93,13 @@ class OpenAICompatProvider(LLMProvider):
 
     def __init__(self, *, base_url: str, api_key: str | None = None,
                  client: Any = None, name: str = "openrouter",
-                 cost_from_response: bool = True):
+                 cost_from_response: bool = True, timeout: float | None = None):
         self.name = name
         self._base_url = base_url
         self._api_key = api_key
         self._client = client
         self._cost_from_response = cost_from_response
+        self._timeout = timeout
 
     def _get_client(self):
         if self._client is None:
@@ -119,6 +123,8 @@ class OpenAICompatProvider(LLMProvider):
         if self._cost_from_response:
             # OpenRouter 需明確要求(usage.include)才會回傳實際費用；否則 usage.cost 不存在。
             create_kwargs["extra_body"] = {"usage": {"include": True}}
+        if self._timeout is not None and self._timeout > 0:
+            create_kwargs["timeout"] = self._timeout
         resp = client.chat.completions.create(**create_kwargs)
         choice = resp.choices[0]
         text = (getattr(choice.message, "content", "") or "").strip()

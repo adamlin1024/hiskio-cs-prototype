@@ -3,7 +3,8 @@
 # 改這個檔就能換模型／改分派，程式碼不用動。改完重啟 server 生效。
 # 金鑰(API key)不寫在這裡，只寫「環境變數名」；真正的金鑰放 .env。
 #
-# 預設值 = 目前線上行為（reasoning→Sonnet、fast→Haiku，都走 Claude 原廠）。
+# 現用：reasoning→DeepSeek V4 Pro、fast→DeepSeek V4 Flash（都走 OpenRouter）。
+# 要換回 Claude 原廠：把下面 [roles.*] 的 provider/model 改回註解裡的 Claude 值即可。
 
 # ── 供應商定義 ──────────────────────────────────────────────
 [providers.anthropic]
@@ -24,12 +25,14 @@ api_key_env = "OPENROUTER_API_KEY"
 
 # ── 等級 → 用哪個供應商的哪個模型 ───────────────────────────
 [roles.reasoning]   # 聰明檔：主對話 / 推理 / 工單摘要
-provider = "anthropic"
-model    = "claude-sonnet-4-6"
+provider = "openrouter"
+model    = "deepseek/deepseek-v4-pro-20260423"
+# 換回 Claude：provider = "anthropic" / model = "claude-sonnet-4-6"
 
 [roles.fast]        # 快省檔：路由 / 分類 / 抽取 / 判斷離題 …
-provider = "anthropic"
-model    = "claude-haiku-4-5-20251001"
+provider = "openrouter"
+model    = "deepseek/deepseek-v4-flash-20260423"
+# 換回 Claude：provider = "anthropic" / model = "claude-haiku-4-5-20251001"
 
 # 範例：把聰明檔換成走 OpenRouter 的 GPT，只要改成
 #   provider = "openrouter"
@@ -49,3 +52,13 @@ input        = 0.80
 output       = 4.0
 cache_read   = 0.08
 cache_create = 1.0
+
+# DeepSeek V4（走 OpenRouter，通常回傳真實費用；此表僅備援）
+# 註：DeepSeek 官方有「北京上班時段 2× 尖峰價」，OpenRouter 是否照加以帳單為準。
+[pricing."deepseek/deepseek-v4-pro-20260423"]
+input  = 0.435
+output = 0.87
+
+[pricing."deepseek/deepseek-v4-flash-20260423"]
+input  = 0.09
+output = 0.18

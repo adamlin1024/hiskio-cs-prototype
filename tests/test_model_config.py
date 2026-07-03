@@ -69,8 +69,13 @@ def test_registry_caches_provider_instances():
 
 
 def test_load_config_reads_shipped_default_file():
-    """出貨的 config/models.toml 應可讀，且含 reasoning / fast 兩等級（=現況）。"""
+    """出貨的 config/models.toml 應可讀，且 reasoning / fast 兩等級都指向已定義的 provider。
+
+    刻意用結構檢查、不寫死模型名——換模型是常態操作，不該每次換都紅。
+    """
     cfg = load_config()
-    assert cfg["roles"]["reasoning"]["provider"] == "anthropic"
-    assert cfg["roles"]["reasoning"]["model"] == "claude-sonnet-4-6"
-    assert cfg["roles"]["fast"]["model"] == "claude-haiku-4-5-20251001"
+    for role in ("reasoning", "fast"):
+        assert role in cfg["roles"], f"缺少等級 {role}"
+        spec = cfg["roles"][role]
+        assert spec["provider"] in cfg["providers"], f"{role} 指向未定義的 provider"
+        assert spec["model"], f"{role} 的 model 不可為空"

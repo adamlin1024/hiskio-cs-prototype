@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 
+from core import runtime_config
 from core.llm_client import call_reasoning, load_prompt
 from core.text_utils import format_recent_history
 
@@ -41,7 +42,8 @@ def respond(state: dict, kb_articles: list[dict], user_message: str) -> str:
     issue = state["issue_context"]
 
     # static 部分（角色、任務、規則）→ 可被 prompt cache 命中
-    system_prompt = _SYSTEM_TPL  # 純靜態，無 placeholder
+    # 人設可由 HiSupport 注入覆寫；沒注入＝檔案預設（byte 相同、行為不變）。
+    system_prompt = runtime_config.get_prompt_override("cs_response_system") or _SYSTEM_TPL
 
     # dynamic 部分（用戶狀態、KB 文章、歷史、訊息）每輪都不同
     user_prompt = _USER_TPL.format(

@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -19,6 +20,8 @@ from core.llm_providers import (
     LLMProvider,
     OpenAICompatProvider,
 )
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "models.toml"
 
@@ -44,8 +47,18 @@ def build_provider(provider_name: str, config: dict) -> LLMProvider:
     if env_name:
         api_key = (os.getenv(env_name) or "").strip() or None
 
+    # LLM 呼叫逾時（秒）：provider 可在設定檔覆寫，否則吃 LLM_TIMEOUT_SECONDS 環境變數、預設 60。
+    # 環境變數填非數字時不讓整台服務開不了機——退回 60 並記 warning。
+    raw_timeout = os.getenv("LLM_TIMEOUT_SECONDS", "60")
+    try:
+        default_timeout = float(raw_timeout)
+    except (TypeError, ValueError):
+        logger.warning("LLM_TIMEOUT_SECONDS 非數字(%r)，改用預設 60 秒", raw_timeout)
+        default_timeout = 60.0
+    timeout = spec.get("timeout", default_timeout)
+
     if ptype == "anthropic":
-        return AnthropicNativeProvider(api_key=api_key, name=provider_name)
+        return AnthropicNativeProvider(api_key=api_key, name=provider_name, timeout=timeout)
     if ptype == "openai_compat":
         return OpenAICompatProvider(
             base_url=spec["base_url"],
@@ -53,6 +66,7 @@ def build_provider(provider_name: str, config: dict) -> LLMProvider:
             name=provider_name,
             # 直連 OpenAI 官方等不支援 usage.include 的端點，可在設定檔設 cost_from_response=false。
             cost_from_response=spec.get("cost_from_response", True),
+            timeout=timeout,
         )
     raise ValueError(f"未知的 provider type: {ptype}")
 

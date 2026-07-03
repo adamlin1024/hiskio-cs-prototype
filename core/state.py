@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from core import runtime_config
+
 DB_PATH = os.getenv("DB_PATH", "data/prototype.db")
 
 
@@ -56,8 +58,9 @@ def new_state(user_info: dict | None = None) -> dict:
             "articles_used_in_response": [],
         },
         "service_limits": {
-            "max_turns_per_session": 20,
-            "max_off_topic_count": 3,
+            # 門檻可由 HiSupport 注入覆寫；沒注入＝現況預設。
+            "max_turns_per_session": runtime_config.get_threshold("max_turns_per_session", 20),
+            "max_off_topic_count": runtime_config.get_threshold("max_off_topic_count", 3),
             "max_low_confidence_count": 3,
             "max_unresolved_count": 3,
             "off_topic_count": 0,

@@ -25,7 +25,7 @@ from __future__ import annotations
 import logging
 import re
 
-from core import pipeline
+from core import pipeline, runtime_config
 from core.state import append_message, load_state, now_iso, save_state
 from nodes import (
     acknowledge_handler,
@@ -266,7 +266,7 @@ def _execute_clarify(state, user_message, decision, session_id) -> dict:
     intent = state["intent_state"]
     intent["consecutive_unclear_count"] += 1
 
-    if intent["consecutive_unclear_count"] >= MAX_UNCLEAR_BEFORE_FORCE_TICKET:
+    if intent["consecutive_unclear_count"] >= runtime_config.get_threshold("max_unclear", MAX_UNCLEAR_BEFORE_FORCE_TICKET):
         return _execute_force_escalation(state, user_message, session_id)
 
     msg = decision.get("clarify_message") or clarification_handler.respond(state, user_message)
@@ -335,7 +335,7 @@ def _execute_out_of_scope(state, user_message, decision, session_id) -> dict:
 def _execute_uncertainty(state, user_message, decision, session_id) -> dict:
     """誠實說我聽不懂，請用戶澄清。"""
     state["intent_state"]["consecutive_unclear_count"] += 1
-    if state["intent_state"]["consecutive_unclear_count"] >= MAX_UNCLEAR_BEFORE_FORCE_TICKET:
+    if state["intent_state"]["consecutive_unclear_count"] >= runtime_config.get_threshold("max_unclear", MAX_UNCLEAR_BEFORE_FORCE_TICKET):
         return _execute_force_escalation(state, user_message, session_id)
 
     msg = decision.get("clarify_message") or DEFAULT_UNCERTAINTY_MSG
