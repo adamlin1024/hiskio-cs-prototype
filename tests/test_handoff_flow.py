@@ -88,6 +88,24 @@ def test_offer_then_decline_full_path(db, monkeypatch):
     assert reloaded["phase"] == "對話中"
 
 
+def test_decide_clear_yes_no_uses_rules_not_llm(db, monkeypatch):
+    """『等待轉真人確認』下，明確的好/不用要用規則判定、完全不呼叫 LLM。
+
+    釘死實測 bug：使用者回「好」時，快速模型偶爾判成 U → 漏接掉回主管 →
+    被誤判成 acknowledge（回「不客氣」）。規則判定杜絕這個漏接。
+    """
+    from nodes import ticket_handler
+
+    def _boom(*a, **k):
+        raise AssertionError("明確的好/不用不該呼叫 LLM")
+
+    monkeypatch.setattr(ticket_handler, "call_fast", _boom)
+    for yes in ["好", "好的", "好啊", "可以", "要", "麻煩你", "OK", "是"]:
+        assert ticket_handler.decide(yes) == "Y", yes
+    for no in ["不用", "不要", "不需要", "算了", "先不用"]:
+        assert ticket_handler.decide(no) == "N", no
+
+
 def test_reason_is_none_when_not_handed_off(db):
     """未交接（requested=False）時，訊號不該夾帶殘留 reason／summary（衛生）。"""
     s = _offered_state()  # 提議中、尚未同意 → requested 應為 False
