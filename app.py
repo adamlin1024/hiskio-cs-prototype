@@ -69,13 +69,28 @@ def _startup() -> None:
     logger.info("執行期設定 runtime_config 已載入")
     # 開機即驗證模型設定：設定檔壞掉/等級解析不出來 → 直接讓服務起不來（大聲失敗），
     # 而不是等線上請求才 500。設定正確時線上請求都能正常解析。
-    from core.model_config import validate_model_config
+    from core.model_config import missing_api_keys, validate_model_config
     try:
         validate_model_config()
         logger.info("模型設定 config/models.toml 驗證通過")
     except Exception as e:
         logger.error("模型設定 config/models.toml 有問題，服務不啟動：%s", e)
         raise
+
+    # 缺 API 金鑰就明講（L1）：沒填金鑰不會擋開機，但線上每次呼叫模型才 401、
+    # 被 llm_client 靜默退化成罐頭回覆。這裡在開機階段就大聲點名缺哪個環境變數。
+    _missing = missing_api_keys()
+    if _missing:
+        logger.warning("=" * 64)
+        for m in _missing:
+            logger.warning(
+                "⚠️  缺少 API 金鑰：環境變數 %s 未設定 → provider「%s」(供 %s 等級) "
+                "的 LLM 呼叫會失敗、自動退化為罐頭回覆。請在 .env 設定 %s 後重啟。",
+                m["env"], m["provider"], "/".join(m["roles"]), m["env"],
+            )
+        logger.warning("=" * 64)
+    else:
+        logger.info("API 金鑰檢查通過：所有等級用到的 provider 金鑰都已設定")
 
 
 class NewSessionReq(BaseModel):

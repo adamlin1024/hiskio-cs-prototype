@@ -126,3 +126,29 @@ def validate_model_config(registry=None) -> "ModelRegistry":
     for role in roles:
         reg.provider_for_role(role)  # 解析不出來（未知 provider、缺 base_url…）會丟錯
     return reg
+
+
+def missing_api_keys(registry: "ModelRegistry | None" = None) -> list[dict]:
+    """回傳「roles 實際會用到、但環境變數沒填(或空)」的 provider 金鑰清單。
+
+    每筆：{"provider": 名稱, "env": 環境變數名, "roles": [用到它的等級]}。
+    用途：啟動時「缺金鑰就明講」。沒填金鑰不會讓 build_provider 失敗，而是等到線上
+    真的呼叫模型才 401、被 llm_client 靜默退化為罐頭回覆——這函式讓它在開機階段就被看見。
+    只檢查「有 role 在用、且設定檔有指定 api_key_env」的 provider（免金鑰/沒人用的不誤報）。
+    """
+    reg = registry or get_registry()
+    config = reg.config
+
+    provider_roles: dict[str, list[str]] = {}
+    for role, spec in config.get("roles", {}).items():
+        pname = spec.get("provider")
+        if pname:
+            provider_roles.setdefault(pname, []).append(role)
+
+    missing: list[dict] = []
+    providers = config.get("providers", {})
+    for pname, used_by in provider_roles.items():
+        env_name = providers.get(pname, {}).get("api_key_env")
+        if env_name and not (os.getenv(env_name) or "").strip():
+            missing.append({"provider": pname, "env": env_name, "roles": used_by})
+    return missing

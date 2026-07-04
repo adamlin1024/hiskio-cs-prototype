@@ -7,6 +7,7 @@ from core.model_config import (
     build_provider,
     get_pricing,
     load_config,
+    missing_api_keys,
     resolve_role,
 )
 
@@ -66,6 +67,50 @@ def test_registry_caches_provider_instances():
     assert p1 is p2  # 應快取、共用同一實例
     assert m1 == "claude-sonnet-4-6"
     assert m2 == "claude-haiku-4-5-20251001"
+
+
+def test_missing_api_keys_flags_unset_env(monkeypatch):
+    """等級用到的 provider 金鑰沒設 → 點名出來（含用到它的等級）。"""
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    cfg = {
+        "providers": {"openrouter": {"type": "openai_compat", "base_url": "u", "api_key_env": "OPENROUTER_API_KEY"}},
+        "roles": {
+            "reasoning": {"provider": "openrouter", "model": "x"},
+            "fast": {"provider": "openrouter", "model": "y"},
+        },
+    }
+    missing = missing_api_keys(ModelRegistry(cfg))
+    assert len(missing) == 1
+    assert missing[0]["env"] == "OPENROUTER_API_KEY"
+    assert set(missing[0]["roles"]) == {"reasoning", "fast"}
+
+
+def test_missing_api_keys_empty_when_all_set(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    cfg = {
+        "providers": {"openrouter": {"type": "openai_compat", "base_url": "u", "api_key_env": "OPENROUTER_API_KEY"}},
+        "roles": {"fast": {"provider": "openrouter", "model": "y"}},
+    }
+    assert missing_api_keys(ModelRegistry(cfg)) == []
+
+
+def test_missing_api_keys_ignores_provider_without_key_env():
+    """本地/免金鑰的 provider（沒設 api_key_env）不該被誤報。"""
+    cfg = {
+        "providers": {"local": {"type": "openai_compat", "base_url": "http://localhost:1234/v1"}},
+        "roles": {"fast": {"provider": "local", "model": "m"}},
+    }
+    assert missing_api_keys(ModelRegistry(cfg)) == []
+
+
+def test_missing_api_keys_only_checks_used_providers(monkeypatch):
+    """有定義但沒有任何 role 用到的 provider，就算沒金鑰也不報。"""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+    missing = missing_api_keys(ModelRegistry(CONFIG))  # CONFIG 的 roles 全用 anthropic
+    # CONFIG 兩個等級都用 anthropic → 只該報 anthropic，不報沒人用的 openrouter
+    envs = {m["env"] for m in missing}
+    assert envs == {"ANTHROPIC_API_KEY"}
 
 
 def test_load_config_reads_shipped_default_file():
