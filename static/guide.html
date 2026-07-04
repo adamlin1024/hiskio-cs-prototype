@@ -192,8 +192,6 @@
   <h1>HiSKIO AI 客服 — 產品說明</h1>
   <div>
     <a href="/">← 回對話介面</a>
-    &nbsp;&nbsp;
-    <a href="/admin">後台</a>
   </div>
 </header>
 
@@ -209,17 +207,16 @@
           <li><a href="#actions">主管 Action 說明</a></li>
           <li><a href="#state">State 除錯欄位對照</a></li>
           <li><a href="#limits">服務上限機制</a></li>
-          <li><a href="#ticket">工單流程</a></li>
+          <li><a href="#ticket">轉真人交接流程</a></li>
         </ul>
       </li>
       <li><strong>版本切換</strong>
         <ul>
-          <li><a href="#flow">系統運作流程（v5 / v6 / v7）</a></li>
+          <li><a href="#flow">系統運作流程（v5 / v6 / v7 / v7.3）</a></li>
         </ul>
       </li>
       <li><strong>運維</strong>
         <ul>
-          <li><a href="#admin">後台介面</a></li>
           <li><a href="#operate">內部操作建議</a></li>
         </ul>
       </li>
@@ -228,11 +225,11 @@
 
   <h2 id="overview">這是什麼</h2>
   <p>
-    HiSKIO AI 客服系統是一個三段式對話客服雛形：
-    先由 <strong>主管（Sonnet）</strong> 看完整對話脈絡決定要做什麼動作，再分派給對應的執行者節點（FAQ 回應、KB 查詢、離題擋下、建立工單等）回應用戶。
+    HiSKIO AI 客服系統是一個對話客服雛形：
+    先由 <strong>主管（Sonnet）</strong> 看完整對話脈絡決定要做什麼動作，再分派給對應的執行者節點（FAQ 回應、KB 查詢、離題擋下、轉真人交接等）回應用戶。
   </p>
   <p>
-    最終目標：用戶能透過對話得到 FAQ 標準答案、KB 知識庫解答；遇到複雜或非業務範圍的問題會自動建議建立工單由真人客服處理。
+    最終目標：用戶能透過對話得到 FAQ 標準答案、KB 知識庫解答；遇到複雜或非業務範圍的問題，AI 會主動提議「轉真人客服」，用戶同意後把交接摘要交給客服平台 HiSupport 由真人接手。
   </p>
   <div class="info">
     內部操作者主要看左側對話、右側即時狀態（State 除錯面板），可隨時了解 AI 為什麼這樣回應、走哪一條路徑。
@@ -245,9 +242,9 @@
 
   <div class="legend-row"><div class="bar" style="background:#9ca3af"></div><div class="text"><strong>灰色 — 問候已達上限 (greeting_blocked)</strong><small>greeting 累計超過 3 次後的硬擋訊息，提示用戶有問題就直接描述、否則請結束對話。不再呼叫 LLM。</small></div></div>
 
-  <div class="legend-row"><div class="bar" style="background:#eab308"></div><div class="text"><strong>橘黃 — 釐清 (clarification)</strong><small>用戶訊息模糊（亂碼、太籠統、無法判斷想問什麼），系統請用戶補充。連續 3 次強制建單。</small></div></div>
+  <div class="legend-row"><div class="bar" style="background:#eab308"></div><div class="text"><strong>橘黃 — 釐清 (clarification)</strong><small>用戶訊息模糊（亂碼、太籠統、無法判斷想問什麼），系統請用戶補充。連續 3 次強制提議轉真人。</small></div></div>
 
-  <div class="legend-row"><div class="bar" style="background:#ea580c"></div><div class="text"><strong>橘色 — 離題 (off_topic)</strong><small>用戶問題不在 HiSKIO 業務範圍（食物、天氣、推薦商品、質疑系統等）。off_topic_count 會累加，達上限後觸發建單建議。</small></div></div>
+  <div class="legend-row"><div class="bar" style="background:#ea580c"></div><div class="text"><strong>橘色 — 離題 (off_topic)</strong><small>用戶問題不在 HiSKIO 業務範圍（食物、天氣、推薦商品、質疑系統等）。off_topic_count 會累加，達上限（預設 3）後轉為灰框擋下 (off_topic_blocked)。</small></div></div>
 
   <div class="legend-row"><div class="bar" style="background:#9ca3af"></div><div class="text"><strong>灰色（小字）— 離題已達上限 (off_topic_blocked)</strong><small>離題累計達上限後的硬擋訊息：「對話僅處理 HiSKIO 服務相關問題」。</small></div></div>
 
@@ -257,13 +254,17 @@
 
   <div class="legend-row"><div class="bar" style="background:#2563eb"></div><div class="text"><strong>藍色 — 知識庫解答 (rag)</strong><small>FAQ 未命中、KB 有相關文章，由 Sonnet 根據 KB 內容生成回答。</small></div></div>
 
-  <div class="legend-row"><div class="bar" style="background:#ec4899"></div><div class="text"><strong>粉紅色 — 知識庫無解 (no_kb_match)</strong><small>KB 完全沒有相關文章，AI 誠實告知並建議建立工單。</small></div></div>
+  <div class="legend-row"><div class="bar" style="background:#ec4899"></div><div class="text"><strong>粉紅色 — 知識庫無解 (no_kb_match)</strong><small>KB 完全沒有相關文章，AI 誠實告知並主動提議轉真人客服。</small></div></div>
 
-  <div class="legend-row"><div class="bar" style="background:#7c3aed"></div><div class="text"><strong>紫色 — 工單流程 (ticket_flow / force_escalation)</strong><small>建議建單／確認建單／收 Email／建單成功 等工單相關訊息。force_escalation 是「連續 3 次無法溝通」的強制建單。</small></div></div>
+  <div class="legend-row"><div class="bar" style="background:#7c3aed"></div><div class="text"><strong>紫色 — 提議轉真人 (handoff_offer / force_escalation)</strong><small>AI 搞不定時主動問「要幫您轉真人客服嗎？（回覆「好」或「不用」）」。force_escalation 是「連續 3 次無法溝通」時的強制提議。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#4f46e5"></div><div class="text"><strong>靛藍 — 已轉真人 (handoff)</strong><small>用戶回「好」，AI 講一句安撫話，並在背景把「轉真人」訊號＋交接摘要送給客服平台 HiSupport，之後由真人客服接手。</small></div></div>
+
+  <div class="legend-row"><div class="bar" style="background:#9ca3af"></div><div class="text"><strong>灰色 — 婉拒轉真人 (handoff_declined)</strong><small>用戶回「不用」，回到一般對話，這次對話不再自動強逼轉真人。</small></div></div>
 
   <div class="legend-row"><div class="bar" style="background:#84cc16"></div><div class="text"><strong>草綠 — 確認語回應 (acknowledge) ⭐ v7 新增</strong><small>用戶說「謝謝」「我知道了」「OK」等確認語，主管直接回禮貌過渡語並把當前 intent 標 confirmed_resolved，不再走 KB（解 v6 鬼打牆）。</small></div></div>
 
-  <div class="legend-row"><div class="bar" style="background:#dc2626"></div><div class="text"><strong>紅色 — 對話結束 (session_ended)</strong><small>工單已建立或對話結束，提示用戶按「新對話」重新開始。</small></div></div>
+  <div class="legend-row"><div class="bar" style="background:#dc2626"></div><div class="text"><strong>紅色 — 已轉真人後的等待訊息 (handoff holding)</strong><small>送出轉真人訊號後，用戶若再打字只回固定的等待回覆、不再呼叫 AI；實際對話已交給真人客服（HiSupport）接手。</small></div></div>
 
   <h2 id="actions">主管 Action 說明（v6 / v7 共用）</h2>
   <p>v6 開始用 Sonnet 主管統一決策，每輪訊息進來主管從以下 12 種 action 選 1。<strong>v5 沒有 action enum</strong>（用流水線分支分流），v5 的對應路徑會在「系統運作流程」分頁的 v5 tab 標出。</p>
@@ -277,8 +278,8 @@
     <tr><td><code>acknowledge_out_of_scope</code></td><td>不在 HiSKIO 業務範圍</td><td>離題訊息</td></tr>
     <tr><td><code>acknowledge_uncertainty</code></td><td>主管不確定用戶想問什麼，誠實告知</td><td>邊界 case（v6 引入） </td></tr>
     <tr><td><code>acknowledge_confirmation</code> ⭐</td><td>用戶說「謝謝 / 我知道了 / OK」等確認語</td><td><strong>v7 新增</strong>。回應由 acknowledge_handler（Haiku）寫，自動推進到下一個 pending intent</td></tr>
-    <tr><td><code>suggest_ticket</code></td><td>建議建立工單</td><td>需要人工介入時</td></tr>
-    <tr><td><code>force_escalation</code></td><td>連續多次無法溝通，強制建單</td><td>很少觸發</td></tr>
+    <tr><td><code>suggest_ticket</code></td><td>提議轉真人客服（沿用原 action 代號，行為已改為轉真人交接、不再開工單）</td><td>需要人工介入時</td></tr>
+    <tr><td><code>force_escalation</code></td><td>連續多次無法溝通，強制提議轉真人</td><td>很少觸發</td></tr>
     <tr><td><code>greeting</code></td><td>純打招呼</td><td>備案，多數情況被 fast-path 先攔</td></tr>
   </table>
 
@@ -297,7 +298,8 @@
   <div class="vtabs">
     <button data-tab="v5">v5 流水線</button>
     <button data-tab="v6">v6 主管統一</button>
-    <button data-tab="v7" class="active">v7.2（current）<span class="badge">main</span></button>
+    <button data-tab="v7">v7.2 流水線權威</button>
+    <button data-tab="v73" class="active">v7.3 轉真人交接<span class="badge">main</span></button>
   </div>
 
   <!-- ────────── v5 panel ────────── -->
@@ -400,8 +402,8 @@
   </div>
 
   <!-- ────────── v7 panel ────────── -->
-  <div class="vpanel active" data-panel="v7">
-    <h3>v7.2 — 流水線權威 + 主管最終決策 + Haiku acknowledge handler（current main）</h3>
+  <div class="vpanel" data-panel="v7">
+    <h3>v7.2 — 流水線權威 + 主管最終決策 + Haiku acknowledge handler（前一版，已被 v7.3 取代）</h3>
     <p><strong>核心想法</strong>：把 v5 流水線復活做為「FAQ/KB 比對權威」，主管 Sonnet 改吃流水線「提議卡」，從 12 個 action 選 1（多了 acknowledge_confirmation）。主管不再吃 FAQ/KB 全表，acknowledge 回應由 Haiku handler 寫。</p>
 
     <div class="arch-box"><span class="lab">[用戶訊息]</span>
@@ -469,6 +471,62 @@
     <p style="font-size:13px;color:#6b7280;">主動推進 pending intent — 這個能力 Haiku 完全勝任、不需要 Sonnet。</p>
   </div>
 
+  <!-- ────────── v7.3 panel ────────── -->
+  <div class="vpanel active" data-panel="v73">
+    <h3>v7.3 — 工單流程 → 轉真人交接（current main）</h3>
+    <p><strong>核心想法</strong>：把整套「開工單」流程整組拿掉，改成「轉真人交接」。AI 搞不定時只做四件事——<strong>判斷搞不定、生一份交接摘要、發出「轉真人」訊號、講一句安撫話後閉環退場</strong>；後續（通知客服、寄信、真人回覆）全部交給 HiSKIO 自建的客服平台 <strong>HiSupport</strong>。對話流程本身（FAQ／KB／離題／多重意圖／acknowledge）沿用 v7.2，沒有動。</p>
+
+    <h4>為什麼要改</h4>
+    <ul>
+      <li><strong>HiSupport 整合</strong>：客服的「收件匣、通知真人、寄信、客戶名冊」本來就該由 HiSupport 這個正規客服平台處理，AI 引擎不該自己另做一套工單資料庫。</li>
+      <li><strong>工單系統永久不做</strong>：HiSupport 已定案「工單系統永久不做」，HiBot 這邊的「建工單、給工單編號、寫進資料庫」失去對象，整組移除。</li>
+      <li><strong>單機＝正式一致</strong>：要讓「單機測試版 HiBot」跟「正式接上 HiSupport」的體驗一模一樣、只差介面，好維護、好對照。連那句安撫話都做成「一個可被 HiSupport 覆寫的槽」——沒接時用內建預設、內建預設跟正式預設一字不差。</li>
+    </ul>
+
+    <h4>改動內容（舊工單流程 → 新轉真人交接）</h4>
+    <table>
+      <tr><th>環節</th><th>舊：工單流程（已移除）</th><th>新：轉真人交接（現行）</th></tr>
+      <tr><td>觸發時的提議</td><td>AI 建議「建立工單」（紫框）</td><td>AI 提議「要幫您轉真人嗎？（回覆「好」或「不用」）」</td></tr>
+      <tr><td>用戶說「好」</td><td>會員直接建單；訪客要先收 Email（格式錯重試 3 次）</td><td>AI 講一句安撫話＋在回應帶出「轉真人」訊號與交接摘要，然後退場（不再收 Email）</td></tr>
+      <tr><td>系統做的事</td><td>用 Sonnet 生工單摘要 → 寫進 SQLite <code>tickets</code> 表 → 回「工單編號 #N」</td><td>只生交接摘要放進訊號，不寫資料庫、不給編號；通知真人／寄信全交 HiSupport</td></tr>
+      <tr><td>之後的對話</td><td><code>phase = 已結束</code> 死路，後續只回「請按新對話」</td><td>設 <code>handed_off</code> 旗標後<strong>閉環</strong>：再打字只回固定等待訊息、不再呼叫 AI，對話交給真人</td></tr>
+      <tr><td>用戶說「不用」</td><td>結束建單流程</td><td>回一般對話，這次對話不再自動強逼轉真人</td></tr>
+      <tr><td>前端與後台</td><td>有「建立工單」按鈕、有 <code>/admin</code> 工單後台頁</td><td>兩者都移除（工單後台改由 HiSupport 提供）</td></tr>
+    </table>
+
+    <h4>對接方式：一個訊號 ＋ 一份摘要交給 HiSupport</h4>
+    <p>HiBot 在對話回應（<code>/api/chat</code>）裡多帶一個 <code>handoff</code> 訊號，其餘全交 HiSupport：</p>
+    <div class="arch-box"><span class="lab">[AI 搞不定]</span> → 提議轉真人 → 用戶回「好」
+        ↓
+  ┌────────────────────────────────────────────┐
+  │ /api/chat 回應多帶 <span class="lab3">handoff</span> 訊號：             │
+  │   <span class="lab2">requested</span>：是否要轉真人（HiSupport 只看這個）│
+  │   <span class="lab2">reason</span>   ：原因（查無 / 多次聽不懂 / 需真人）│
+  │   <span class="lab2">summary</span>  ：給真人看的一句話交接摘要       │
+  │ ai_response ＝ 那句安撫話（字來自可注入的槽）│
+  └────────────────────────────────────────────┘
+        ↓
+  ┌─ <span class="lab4">HiSupport 接手（不再回 HiBot）</span> ────────┐
+  │ 把對話從機器人切給真人 · 保留脈絡        │
+  │ 內部留言顯示 summary 給客服              │
+  │ 通知真人 · 處理通知信箱 / 寄信          │
+  └────────────────────────────────────────┘</div>
+    <ul>
+      <li><strong>HiBot（腦）只做</strong>：判斷該不該轉、生交接摘要、發訊號、講安撫話、閉環退場。</li>
+      <li><strong>HiSupport（門面＋手）做</strong>：切成真人、顯示摘要、通知真人、通知信箱、寄信、管服務時間；切成真人後不再把訊息送回 HiBot。</li>
+      <li><strong>解耦</strong>：<code>handoff</code> 訊號與安撫話注入都是相容的「加法」，HiSupport 還沒接也不會壞（HiBot 單機用內建預設照跑）。</li>
+    </ul>
+
+    <h4>同時清掉的死碼</h4>
+    <ul>
+      <li>服務上限只留「離題達上限 → 擋下」會真的觸發；舊的「20 輪上限」「低信心上限」「未解決上限」「<code>limit_reached</code>」都只計數、不觸發動作，整組移除。</li>
+      <li>phase 精簡為「對話中／等待用戶選擇意圖／等待轉真人確認」（舊的「等待工單確認／等待 Email／已結束」拿掉）。</li>
+      <li><code>/admin</code> 工單後台頁移除（工單後台由 HiSupport 提供）。</li>
+    </ul>
+
+    <p style="font-size:13px;color:#6b7280;">單一真理文件：<code>../HiSupport/docs/2026-07-04-hibot-handoff-contract.md</code>（訊號規格、兩邊 to-do、摘要格式、封存記錄）。</p>
+  </div>
+
 
   <h2 id="state">右側 State 除錯面板欄位對照</h2>
   <p>
@@ -482,7 +540,7 @@
     <tr><th>欄位</th><th>說明</th></tr>
     <tr><td><code>session_id</code></td><td>對話 session 唯一 ID（UUID）</td></tr>
     <tr><td><code>created_at / updated_at</code></td><td>建立 / 最後更新時間（UTC）</td></tr>
-    <tr><td><code>phase</code></td><td>對話階段：對話中／等待用戶選擇意圖／等待工單確認／等待 Email／已結束</td></tr>
+    <tr><td><code>phase</code></td><td>對話階段：對話中／等待用戶選擇意圖／等待轉真人確認</td></tr>
     <tr><td><code>turn_count</code></td><td>對話輪數（greeting 不計）</td></tr>
   </table>
 
@@ -490,7 +548,7 @@
   <table>
     <tr><th>欄位</th><th>說明</th></tr>
     <tr><td><code>is_logged_in</code></td><td>是否登入會員</td></tr>
-    <tr><td><code>user_id / user_name / user_email</code></td><td>會員資料（建單時自動帶 email）</td></tr>
+    <tr><td><code>user_id / user_name / user_email</code></td><td>會員資料（會員的聯繫 email，轉真人交接摘要會帶上身分）</td></tr>
     <tr><td><code>purchase_history</code></td><td>已購課程清單（mock 資料）</td></tr>
   </table>
 
@@ -499,7 +557,7 @@
   <table>
     <tr><th>欄位</th><th>說明</th></tr>
     <tr><td><code>input_classification</code></td><td>本輪 manager 選的 action 名稱</td></tr>
-    <tr><td><code>consecutive_unclear_count</code></td><td>連續模糊計數，達 3 次強制建單</td></tr>
+    <tr><td><code>consecutive_unclear_count</code></td><td>連續模糊計數，達 3 次強制提議轉真人</td></tr>
     <tr><td><code>greeting_count</code></td><td>session 累計 greeting 次數，超過 max（3）轉灰框</td></tr>
     <tr><td><code>current_intent</code></td><td>目前正在跟用戶討論的意圖文字</td></tr>
     <tr><td><code>awaiting_selection</code></td><td>是否在等用戶從多重意圖選一個</td></tr>
@@ -536,52 +594,48 @@
   </table>
 
   <h2 id="limits">服務上限機制 (service_limits)</h2>
-  <p>系統有四個累計計數器，達到上限會自動建議建單：</p>
-  <table>
-    <tr><th>計數器</th><th>上限</th><th>觸發條件</th></tr>
-    <tr><td><code>off_topic_count</code></td><td>3</td><td>用戶連續 3 次離題</td></tr>
-    <tr><td><code>low_confidence_count</code></td><td>3</td><td>AI 對自己答案的信心 &lt; 0.4 累計 3 次</td></tr>
-    <tr><td><code>unresolved_count</code></td><td>3</td><td>用戶對 AI 回答不滿意累計 3 次</td></tr>
-    <tr><td><code>turn_count</code></td><td>20</td><td>整個 session 對話超過 20 輪</td></tr>
-  </table>
   <p>
-    任一條件觸發後 <code>limit_reached</code> 變 true，<code>limit_reached_reason</code> 會記錄是哪個原因，
-    下一輪用戶說話時系統主動跳出建議建單訊息。
+    這裡有幾個累計計數器。過去它們「達上限就自動建工單」，這次改版把那套拿掉了——
+    現在<strong>只有「離題」這一條真的會觸發動作</strong>，其餘計數器只是「記下來給主管／人工參考」、本身不會讓系統做任何事。
   </p>
+  <table>
+    <tr><th>計數器</th><th>上限</th><th>達上限時會怎樣</th></tr>
+    <tr><td><code>off_topic_count</code></td><td><code>max_off_topic_count</code>（預設 3）</td><td><strong>唯一會觸發動作的</strong>：連續離題達上限 → 之後離題訊息轉為灰框擋下 (off_topic_blocked)，提示「對話僅處理 HiSKIO 服務相關問題」。</td></tr>
+    <tr><td><code>low_confidence_count</code></td><td>—</td><td>只累計、不觸發任何動作，僅供主管／人工參考。</td></tr>
+    <tr><td><code>unresolved_count</code></td><td>—</td><td>只累計、不觸發任何動作，僅供主管／人工參考。</td></tr>
+  </table>
   <div class="note">
-    用戶若拒絕建單（回「不用」），<code>user_decision</code> 變 declined，系統不會再重複建議建單；
-    繼續離題的話會走灰框 off_topic_blocked。
+    <strong>這次改版清掉的東西</strong>：舊的「20 輪上限 (<code>max_turns_per_session</code>)」「低信心上限」「未解決上限」，以及 <code>limit_reached</code> / <code>limit_reached_reason</code> 兩個旗標——它們過去只有「計數」、不會真的觸發任何動作（等於沒用的死碼），所以整組移除。「達上限自動建單」的舊行為已不存在。
+  </div>
+  <div class="info">
+    需要真人協助時走的是「轉真人交接」流程（見下一段），不再是建立工單。
   </div>
 
-  <h2 id="ticket">工單流程</h2>
+  <h2 id="ticket">轉真人交接流程</h2>
+  <p>
+    這次改版把整套「開工單」流程拿掉了。過去 AI 搞不定時會幫用戶「建立一張工單」寫進資料庫、給一個工單編號；
+    現在改成<strong>「轉真人交接」</strong>——AI 只負責判斷搞不定、生一份交接摘要、發出訊號，實際後續（通知客服、寄信、真人回覆）都交給客服平台 <strong>HiSupport</strong> 處理。
+  </p>
   <ol>
-    <li>系統建議建單（紫框 ticket_flow）</li>
-    <li>用戶回「好」或「不用」（系統用 Haiku 判斷）
+    <li>AI 搞不定（知識庫查無、多次聽不懂、或判斷需要真人）→ 主動提議「<strong>要幫您轉真人嗎？（回覆「好」或「不用」）</strong>」（紫框 handoff_offer）。</li>
+    <li>用戶回「好」或「不用」（系統用便宜模型判斷）
       <ul>
-        <li><strong>好</strong> → 進階段 3</li>
-        <li><strong>不用</strong> → 結束建單流程，回對話模式（不再重複建議）</li>
-        <li><strong>看不出意圖</strong> → 退回對話模式，重新交給主管處理</li>
+        <li><strong>好</strong> → AI 講一句安撫話（內建預設：「好的，我們會將您的訊息轉達給真人客服，並於正常上班日回覆您。」，HiSupport 後台可改寫並推送覆寫這句），同時在回應裡帶出「轉真人」訊號＋交接摘要，然後退場（handoff）。</li>
+        <li><strong>不用</strong> → 回到一般對話，這次對話不再自動強逼轉真人（handoff_declined）。</li>
+        <li><strong>看不出意圖</strong> → 退回對話模式，重新交給主管處理。</li>
       </ul>
     </li>
-    <li>檢查身分
-      <ul>
-        <li>會員 → 直接用 user_info.user_email 建單</li>
-        <li>訪客 → 進階段 4 收 Email</li>
-      </ul>
-    </li>
-    <li>收集 Email（最多重試 3 次格式錯誤後放棄）</li>
-    <li>Sonnet 生成工單摘要 → 寫入 SQLite tickets 表 → 回工單編號</li>
-    <li><code>phase = 已結束</code>，後續輸入固定回「請按新對話按鈕」</li>
+    <li>轉真人後<strong>閉環</strong>：設 <code>handed_off</code> 旗標，用戶若再打字只回固定的等待回覆、不再呼叫 AI；對話已交給真人客服。</li>
   </ol>
-
-  <h2 id="admin">後台介面</h2>
-  <p><a href="/admin" target="_blank">/admin</a> 提供：</p>
-  <ul>
-    <li>工單列表（依時間倒序）</li>
-    <li>篩選 Open / In Progress / Closed</li>
-    <li>單筆工單可標記狀態（標記 Open / 處理中 / 結案）</li>
-    <li>查看完整對話 modal：含 AI 摘要 + AI 嘗試過什麼 + 完整 chat_history（每則含 response_type）</li>
-  </ul>
+  <div class="info">
+    <strong>HiBot 與 HiSupport 怎麼對接</strong>：HiBot（這支 AI 引擎）在對話回應裡多帶一個 <code>handoff</code> 訊號，內含三樣東西——
+    <code>requested</code>（是否要轉真人）、<code>reason</code>（原因，如知識庫查無／多次聽不懂／需要真人）、<code>summary</code>（給真人看的一句話交接摘要）。
+    HiSupport 讀到訊號後，負責把對話從機器人切給真人、用內部留言把摘要顯示給客服、通知真人、處理通知信箱與寄信。
+    HiBot 這端不碰「之後的訊息、Email、通知真人」這些事。
+  </div>
+  <div class="note">
+    為什麼這樣分工：HiSupport（HiSKIO 自建客服平台）已定案「工單系統永久不做」；HiBot 只做「判斷搞不定＋產摘要＋發訊號＋閉環」，其餘交 HiSupport。這樣「單機測試版 HiBot」與「正式 HiSupport」體驗一致、也好維護。
+  </div>
 
   <h2 id="operate">內部操作建議</h2>
   <h3>觀察 AI 行為</h3>
@@ -599,7 +653,7 @@
     <tr><td>多重意圖</td><td>「我有發票跟付款問題」</td><td>深紫 intent_selection</td></tr>
     <tr><td>主從關係</td><td>「我發票要先解決，順便看一下退費」</td><td>綠／藍（直接處理發票）</td></tr>
     <tr><td>離題</td><td>「你今天午餐吃什麼」</td><td>橘色 off_topic</td></tr>
-    <tr><td>系統不知道</td><td>「你們公司有附設停車場嗎」</td><td>粉紅 no_kb_match + 建單按鈕</td></tr>
+    <tr><td>系統不知道</td><td>「你們公司有附設停車場嗎」</td><td>粉紅 no_kb_match → 提議轉真人</td></tr>
     <tr><td>純問候</td><td>「你好」</td><td>淺藍虛線 greeting</td></tr>
     <tr><td>模糊訊息連發</td><td>「我有問題」、「不行」、「dlsjfk」</td><td>第 3 次 → 紫色 force_escalation</td></tr>
   </table>
@@ -608,15 +662,15 @@
   <ol>
     <li>看右側 State 面板：<code>intent_state.input_classification</code> 顯示主管選了哪個 action</li>
     <li>看 <code>intent_log</code>：所有偵測到的意圖、status、role 都在這裡，可看出系統「以為」用戶要做什麼</li>
-    <li>看 <code>service_limits</code>：是不是已達某個上限導致系統行為不一樣</li>
-    <li>看 <code>ticket_state</code>：用戶是否已拒絕過建單（declined）影響後續邏輯</li>
+    <li>看 <code>service_limits</code>：離題計數 <code>off_topic_count</code> 是否已達上限（現在只有這條會觸發擋下）</li>
+    <li>看 <code>handed_off</code> 旗標：是否已轉真人（轉過就閉環、之後只回固定等待訊息）</li>
   </ol>
 
   <h3>常見「為什麼 AI 這樣回」的原因</h3>
   <table>
     <tr><th>觀察到的行為</th><th>可能原因</th></tr>
     <tr><td>連續被問「我聽不懂」</td><td>主管判 acknowledge_uncertainty 或 clarify。可能用戶訊息太籠統，或 chat_history 有歷次 clarify 紀錄拖累判斷。</td></tr>
-    <tr><td>突然冒出「建立工單」按鈕</td><td>主管選了 suggest_ticket，或服務上限觸發，或 cs_response 加了 [SUGGEST_TICKET] 標記。</td></tr>
+    <tr><td>突然提議「轉真人客服」</td><td>主管選了 suggest_ticket（現行為＝提議轉真人），或知識庫查無 (no_kb_match)，或連續多次無法溝通觸發 force_escalation。</td></tr>
     <tr><td>第 4 次「你好」變成灰框</td><td>greeting_count 超過 max（預設 3）後永久轉灰框，不再用 LLM 生問候。</td></tr>
     <tr><td>用戶離題系統不擋</td><td>主管判定屬於 in_scope 範圍（例如帶有「課程」「影片」關鍵詞）。可調主管 prompt 範圍定義。</td></tr>
     <tr><td>「下一個問題呢」沒對應到舊意圖</td><td>主管沒解析到指稱詞，可能 intent_log 已經沒 pending 項或 status 已經 confirmed_resolved。</td></tr>
@@ -629,8 +683,8 @@
   </ul>
 
 <p style="margin-top: 60px; padding-top: 20px; border-top: 1px solid #e3e5ea; color: #6b7280; font-size: 12px;">
-    雛形版本 v7.1（流水線權威 + 主管最終決策 + Anthropic Prompt Caching）。
-    完整技術規格見 <code>data/hiskio_cs_prototype_spec_v6.md</code>（v7 沿用 v6 結構，差異見上方版本演化區）。
+    雛形版本 v7.3（流水線權威 + 主管最終決策 + 轉真人交接 + 模型無關 LLM 層）。
+    完整技術規格見 <code>data/hiskio_cs_prototype_spec_v6.md</code>；轉真人交接的單一真理見 <code>../HiSupport/docs/2026-07-04-hibot-handoff-contract.md</code>。
   </p>
 
 </div>

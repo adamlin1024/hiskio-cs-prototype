@@ -25,7 +25,7 @@ def _format_purchase_summary(purchase_history: list[str]) -> str:
 
 def _format_kb_articles(articles: list[dict]) -> str:
     if not articles:
-        return "（KB 沒有相關文章，請謹慎回應，必要時建議建工單）"
+        return "（KB 沒有相關文章，請謹慎回應，必要時建議轉真人客服）"
     blocks = []
     for art in articles:
         blocks.append(
@@ -60,7 +60,7 @@ def respond(state: dict, kb_articles: list[dict], user_message: str) -> str:
         user_message=user_message,
     )
 
-    fallback = "抱歉，目前系統有點忙不過來，請稍後再試或考慮建立工單由客服跟進。"
+    fallback = "抱歉，目前系統有點忙不過來，請您稍後再試一次。"
     return call_reasoning(
         user_prompt,
         max_tokens=600,

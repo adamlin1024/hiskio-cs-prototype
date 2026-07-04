@@ -99,9 +99,10 @@
   .msg.rag { border-left-color: var(--rag); }
   .msg.off_topic { border-left-color: var(--off-topic); }
   .msg.off_topic_blocked { border-left-color: var(--off-topic-blocked); font-size: 13px; color: var(--muted); }
-  .msg.ticket_flow { border-left-color: var(--ticket-flow); }
+  .msg.handoff_offer { border-left-color: var(--ticket-flow); }
   .msg.force_escalation { border-left-color: var(--ticket-flow); }
-  .msg.session_ended { border-left-color: var(--session-ended); }
+  .msg.handoff { border-left-color: #0891b2; border-left-width: 4px; }
+  .msg.handoff_declined { border-left-color: var(--muted); font-size: 13px; color: var(--muted); }
   .msg.greeting {
     border-left-color: var(--greeting);
     border-left-style: dashed;
@@ -123,17 +124,6 @@
     font-size: 11px;
     color: var(--muted);
     margin-top: 4px;
-  }
-  .ticket-btn {
-    display: inline-block;
-    margin-top: 8px;
-    padding: 6px 12px;
-    background: var(--ticket-flow);
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
   }
   #input-row {
     border-top: 1px solid var(--border);
@@ -366,7 +356,6 @@
   <div style="display:flex;gap:8px;">
     <button onclick="$('legend-modal').classList.add('open')" title="顯示對話訊息顏色說明">🎨 燈號說明</button>
     <a href="/docs/guide" target="_blank">產品說明</a>
-    <a href="/admin">後台</a>
     <button onclick="location.reload()">新對話</button>
   </div>
 </header>
@@ -425,10 +414,11 @@ const LEGEND = [
   { type: "intent_selection",  color: "#4c1d95", label: "多重意圖選項 (intent_selection)", desc: "偵測到多個獨立問題，列選項請用戶選一個先處理。" },
   { type: "faq",               color: "#16a34a", label: "FAQ 標準答案 (faq)",        desc: "命中 FAQ，AI 用核心步驟一字不漏照抄、潤飾開場結尾。" },
   { type: "rag",               color: "#2563eb", label: "知識庫解答 (rag)",         desc: "FAQ 未命中、KB 有相關文章，由 Sonnet 根據 KB 內容生成回答。" },
-  { type: "no_kb_match",       color: "#ec4899", label: "知識庫無解 (no_kb_match)", desc: "KB 完全沒有相關文章，AI 誠實告知並建議建立工單。" },
-  { type: "ticket_flow",       color: "#7c3aed", label: "工單流程 (ticket_flow)",    desc: "建議建單／確認建單／收 Email／建單成功 等工單相關訊息。" },
-  { type: "force_escalation",  color: "#7c3aed", label: "強制建單 (force_escalation)", desc: "連續 3 次模糊／無法溝通，系統強制建單。" },
-  { type: "session_ended",     color: "#dc2626", label: "對話結束 (session_ended)",  desc: "工單已建立或對話結束，請按「新對話」重新開始。" },
+  { type: "no_kb_match",       color: "#ec4899", label: "知識庫無解 (no_kb_match)", desc: "KB 完全沒有相關文章，AI 誠實告知並提議轉真人客服。" },
+  { type: "handoff_offer",     color: "#7c3aed", label: "提議轉真人 (handoff_offer)", desc: "AI 判斷需要真人，詢問「要幫您轉真人嗎？」等用戶回「好／不用」。" },
+  { type: "force_escalation",  color: "#7c3aed", label: "強制提議轉真人 (force_escalation)", desc: "連續 3 次模糊／無法溝通，系統主動提議轉真人。" },
+  { type: "handoff",           color: "#0891b2", label: "已轉真人 (handoff)",        desc: "用戶同意轉真人：講一句安撫話、發出交接訊號給 HiSupport，HiBot 退場。" },
+  { type: "handoff_declined",  color: "#9ca3af", label: "婉拒轉真人 (handoff_declined)", desc: "用戶回「不用」：回到對話，這次 session 不再自動強逼。" },
 ];
 
 // ─── State 欄位中文說明 ───
@@ -437,7 +427,7 @@ const STATE_FIELD_DOC = {
   session_id:    "對話 session 唯一 ID（UUID）",
   created_at:    "session 建立時間（UTC ISO 8601）",
   updated_at:    "最後更新時間",
-  phase:         "對話階段：對話中／等待用戶選擇意圖／等待工單確認／等待 Email／已結束",
+  phase:         "對話階段：對話中／等待用戶選擇意圖／等待轉真人確認",
   turn_count:    "對話輪數（greeting 不計）",
 
   // user_info
@@ -462,24 +452,17 @@ const STATE_FIELD_DOC = {
   indexed_articles:        "manager 挑選的 KB 文章 ID 清單",
   articles_used_in_response: "實際塞進 cs_response prompt 的文章",
 
-  // service_limits
-  max_turns_per_session:    "單一 session 最多輪數（預設 20）",
-  max_off_topic_count:      "離題容忍上限（預設 3）",
-  max_low_confidence_count: "低信心容忍上限（預設 3）",
-  max_unresolved_count:     "未解決容忍上限（預設 3）",
+  // service_limits（2026-07-04 清理：只剩離題會觸發動作；低信心/未解決僅為主管軟參考計數）
+  max_off_topic_count:      "離題容忍上限（預設 3；達上限 → 擋下 off_topic_blocked）",
   off_topic_count:          "已累計離題次數",
-  low_confidence_count:     "已累計 AI 低信心回答次數",
-  unresolved_count:         "已累計用戶不滿意次數",
-  limit_reached:            "是否已達服務上限（觸發後建議建單）",
-  limit_reached_reason:     "達到上限的原因：turn_max／off_topic_max／low_confidence_max／unresolved_max",
+  low_confidence_count:     "已累計 AI 低信心回答次數（僅供主管參考，不觸發動作）",
+  unresolved_count:         "已累計用戶不滿意次數（僅供主管參考，不觸發動作）",
 
-  // ticket_state
-  ticket_suggested:    "AI 是否已建議建單",
-  user_decision:       "用戶對建單的回應：accepted／declined／null",
-  collecting_email:    "是否正在向訪客收 Email",
-  email_attempts:      "Email 格式錯誤次數（達 3 次放棄建單）",
-  ticket_id:           "已建立的工單編號",
-  ticket_created_at:   "工單建立時間",
+  // ticket_state（轉真人交接狀態）
+  ticket_suggested:    "AI 是否已提議轉真人（等待用戶確認）",
+  user_decision:       "用戶對轉真人的回應：accepted／declined／null",
+  handed_off:          "是否已交接真人（True＝回應帶 handoff.requested、之後閉環）",
+  handoff_reason:      "轉真人原因：no_kb_match／unclear_limit／needs_human／user_request",
 
   // intent_state
   input_classification:      "本輪 manager 選的 action（greeting/clarify/answer_with_faq/...）",
@@ -726,10 +709,9 @@ async function send() {
     if (!r.ok) throw new Error(await r.text());
     const data = await r.json();
     placeholder.remove();
-    const msgEl = appendMessage(data.ai_response, "ai", data.response_type);
-    if (data.show_ticket_button) {
-      attachTicketButton(msgEl);
-    }
+    appendMessage(data.ai_response, "ai", data.response_type);
+    // 轉真人不再有「建立工單」按鈕：用戶直接用文字回「好／不用」；
+    // 轉真人的後續（訊息、通知、Email）由 HiSupport 端處理（見交接約定）。
     renderState(data.state);
   } catch (e) {
     placeholder.textContent = "錯誤：" + e.message;
@@ -738,35 +720,6 @@ async function send() {
     sendBtn.disabled = false;
     inputEl.focus();
   }
-}
-
-function attachTicketButton(msgEl) {
-  const btn = document.createElement("button");
-  btn.className = "ticket-btn";
-  btn.textContent = "建立工單";
-  btn.onclick = async () => {
-    btn.disabled = true;
-    btn.textContent = "處理中...";
-    try {
-      const r = await fetch("/api/ticket/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId }),
-      });
-      if (!r.ok) throw new Error(await r.text());
-      const data = await r.json();
-      const newMsg = appendMessage(data.ai_response, "ai", data.response_type);
-      if (data.show_ticket_button) attachTicketButton(newMsg);
-      renderState(data.state);
-      btn.remove();
-    } catch (e) {
-      btn.disabled = false;
-      btn.textContent = "建立工單";
-      alert("建立工單失敗：" + e.message);
-    }
-  };
-  msgEl.appendChild(document.createElement("br"));
-  msgEl.appendChild(btn);
 }
 
 sendBtn.onclick = send;

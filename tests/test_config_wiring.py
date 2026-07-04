@@ -16,17 +16,13 @@ def teardown_function():
 def test_new_state_default_thresholds():
     runtime_config.reset()
     s = state_mod.new_state()
-    assert s["service_limits"]["max_turns_per_session"] == 20
     assert s["service_limits"]["max_off_topic_count"] == 3
 
 
 def test_new_state_honors_threshold_override():
     runtime_config.reset()
-    runtime_config.set_overlay(
-        {"thresholds": {"max_turns_per_session": 5, "max_off_topic_count": 9}}
-    )
+    runtime_config.set_overlay({"thresholds": {"max_off_topic_count": 9}})
     s = state_mod.new_state()
-    assert s["service_limits"]["max_turns_per_session"] == 5
     assert s["service_limits"]["max_off_topic_count"] == 9
 
 

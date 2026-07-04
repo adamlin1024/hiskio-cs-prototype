@@ -7,7 +7,7 @@ v7.1 設計（流水線當權威）：
 - 主管不再從零挑替代 FAQ/KB（信心低就請用戶澄清）
 
 不在以下情況呼叫流水線（省 token）：
-- phase 攔截（等待選擇意圖 / 工單確認 / Email / 已結束）
+- phase 攔截（等待選擇意圖 / 等待轉真人確認）、已交接（handed_off）
 - greeting fast-path（regex 攔下純問候）
 """
 from __future__ import annotations

@@ -15,13 +15,13 @@ def setup_function():
 
 
 def test_defaults_when_empty():
-    assert runtime_config.get_threshold("max_turns_per_session", 20) == 20
+    assert runtime_config.get_threshold("max_off_topic_count", 3) == 3
     assert runtime_config.get_prompt_override("cs_response_system") is None
 
 
 def test_set_threshold_override():
-    runtime_config.set_overlay({"thresholds": {"max_turns_per_session": 30}})
-    assert runtime_config.get_threshold("max_turns_per_session", 20) == 30
+    runtime_config.set_overlay({"thresholds": {"max_off_topic_count": 7}})
+    assert runtime_config.get_threshold("max_off_topic_count", 3) == 7
 
 
 def test_rejects_unknown_and_bad_thresholds():
@@ -41,9 +41,9 @@ def test_prompt_override_whitelist():
 
 
 def test_merge_keeps_existing():
-    runtime_config.set_overlay({"thresholds": {"max_turns_per_session": 30}})
+    runtime_config.set_overlay({"thresholds": {"max_unclear": 4}})
     runtime_config.set_overlay({"thresholds": {"max_off_topic_count": 9}})
-    assert runtime_config.get_threshold("max_turns_per_session", 20) == 30
+    assert runtime_config.get_threshold("max_unclear", 2) == 4
     assert runtime_config.get_threshold("max_off_topic_count", 3) == 9
 
 

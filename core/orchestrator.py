@@ -4,11 +4,11 @@
 
     handle_user_message
        │
+       ├─ handed_off guard（已交接真人 → _handed_off_holding，閉環退場）
+       │
        ├─ phase guards（特殊 phase 直接交給對應 handler，可 fall through）
        │     等待用戶選擇意圖 → _try_select_or_fall_through
-       │     等待工單確認 → ticket_handler.decide → Y/N 直接 return；U fall through
-       │     等待 Email → ticket_handler.handle_email_input
-       │     已結束 → _ended_session
+       │     等待轉真人確認 → ticket_handler.decide → Y 走 _execute_handoff / N 走 decline / U fall through
        │
        ├─ greeting fast-path（regex 快速擋純問候，省一次 Sonnet）
        │
@@ -26,7 +26,7 @@ import logging
 import re
 
 from core import pipeline, runtime_config
-from core.state import append_message, load_state, now_iso, save_state
+from core.state import append_message, build_handoff, load_state, now_iso, save_state
 from nodes import (
     acknowledge_handler,
     clarification_handler,
@@ -52,8 +52,8 @@ GREETING_BLOCKED_MSG = (
     "若沒有客服需求，可以關閉視窗結束對話。"
 )
 FORCE_ESCALATION_MSG = (
-    "看起來這個問題比較複雜，建議由人工客服協助處理會更有效率。\n"
-    "我為您建立工單，客服團隊會主動聯繫您。"
+    "看起來這個問題我這邊比較難處理，交給真人客服會更快。\n"
+    "要幫您轉真人嗎？（回覆「好」或「不用」）"
 )
 DEFAULT_OUT_OF_SCOPE_MSG = (
     "這個問題不在 HiSKIO 客服範圍內喔，"
@@ -61,12 +61,11 @@ DEFAULT_OUT_OF_SCOPE_MSG = (
 )
 DEFAULT_UNCERTAINTY_MSG = "抱歉，我不太確定您想問的內容，能否再多描述一下您遇到的狀況？"
 
-_LIMIT_REASON_MESSAGES = {
-    "turn_max": "這次對話的輪數已經達到上限，為了讓客服能更完整地跟進您的問題",
-    "off_topic_max": "我們的對話似乎多次偏離主題",
-    "low_confidence_max": "看起來這個情況有點複雜，AI 可能無法完整協助",
-    "unresolved_max": "看起來我前面的回應沒能解決您的問題",
-}
+# 轉真人安撫話「內建預設」：HiSupport 沒推 handoff_message 時用這句（純單機／未接時）。
+# 依約定，這句要跟 HiSupport 後台「期待管理訊息」的預設一致，確保單機＝正式體驗。
+DEFAULT_HANDOFF_MSG = "好的，我們會將您的訊息轉達給真人客服，並於正常上班日回覆您。"
+# 已交接後、單機被繼續輸入時的固定 holding（正式環境 HiSupport 已切真人、不會再送進來）
+HANDED_OFF_HOLDING_MSG = "您的訊息我已經轉給真人客服，請稍候他們的回覆。"
 
 # Greeting fast-path：純招呼用 regex 攔截，不勞煩 Sonnet 主管
 _GREETING_RE = re.compile(
@@ -88,6 +87,12 @@ def handle_user_message(session_id: str, user_message: str) -> dict:
         raise ValueError(f"找不到 session: {session_id}")
 
     append_message(state, "user", user_message)
+
+    # 0. 已交接真人 → HiBot 退場（閉環）。
+    #    正式環境 HiSupport 已把 responder 切真人、不會再送訊息進來；單機用 holding 模擬，
+    #    維持 handoff 訊號、不再打 LLM、不再重問。
+    if state["ticket_state"].get("handed_off"):
+        return _handed_off_holding(state, user_message, session_id)
 
     # 1. 特殊 phase 攔截
     phase_result = _try_handle_phase(state, user_message, session_id)
@@ -130,23 +135,17 @@ def _try_handle_phase(state: dict, user_message: str, session_id: str) -> dict |
     if phase == "等待用戶選擇意圖":
         return _try_select_or_fall_through(state, user_message, session_id)
 
-    if phase == "等待工單確認":
+    if phase == "等待轉真人確認":
         decision = ticket_handler.decide(user_message)
-        logger.info("session=%s 工單確認 decision=%s", session_id, decision)
+        logger.info("session=%s 轉真人確認 decision=%s", session_id, decision)
         if decision == "Y":
-            return ticket_handler.handle_accept(state)
+            return _execute_handoff(state, user_message, session_id)
         if decision == "N":
             return ticket_handler.handle_decline(state)
         # U：重置 phase，fall through 到 manager
         state["phase"] = "對話中"
         state["ticket_state"]["ticket_suggested"] = False
         return None
-
-    if phase == "等待 Email":
-        return ticket_handler.handle_email_input(state, user_message)
-
-    if phase == "已結束":
-        return _ended_session(state)
 
     return None
 
@@ -262,11 +261,16 @@ def _execute_action(
 
 
 def _execute_clarify(state, user_message, decision, session_id) -> dict:
-    """連續 unclear 達上限 → 強制建單；否則用 manager 給的 clarify_message 或自己生。"""
+    """連續 unclear 達上限 → 強制轉真人；但使用者已拒絕過留言，這次 session 不再自動強逼。"""
     intent = state["intent_state"]
     intent["consecutive_unclear_count"] += 1
 
-    if intent["consecutive_unclear_count"] >= runtime_config.get_threshold("max_unclear", MAX_UNCLEAR_BEFORE_FORCE_TICKET):
+    already_declined = state["ticket_state"].get("user_decision") == "declined"
+    if (
+        intent["consecutive_unclear_count"]
+        >= runtime_config.get_threshold("max_unclear", MAX_UNCLEAR_BEFORE_FORCE_TICKET)
+        and not already_declined
+    ):
         return _execute_force_escalation(state, user_message, session_id)
 
     msg = decision.get("clarify_message") or clarification_handler.respond(state, user_message)
@@ -333,9 +337,14 @@ def _execute_out_of_scope(state, user_message, decision, session_id) -> dict:
 
 
 def _execute_uncertainty(state, user_message, decision, session_id) -> dict:
-    """誠實說我聽不懂，請用戶澄清。"""
+    """誠實說我聽不懂，請用戶澄清；已拒絕過留言的 session 不再自動強逼。"""
     state["intent_state"]["consecutive_unclear_count"] += 1
-    if state["intent_state"]["consecutive_unclear_count"] >= runtime_config.get_threshold("max_unclear", MAX_UNCLEAR_BEFORE_FORCE_TICKET):
+    already_declined = state["ticket_state"].get("user_decision") == "declined"
+    if (
+        state["intent_state"]["consecutive_unclear_count"]
+        >= runtime_config.get_threshold("max_unclear", MAX_UNCLEAR_BEFORE_FORCE_TICKET)
+        and not already_declined
+    ):
         return _execute_force_escalation(state, user_message, session_id)
 
     msg = decision.get("clarify_message") or DEFAULT_UNCERTAINTY_MSG
@@ -381,15 +390,14 @@ def _execute_suggest_ticket(state, user_message, decision, session_id) -> dict:
     if target_text:
         _switch_current_intent(state, target_text)
 
-    reason = decision.get("reason_to_user") or "這個問題建議由人工客服協助處理會更有效率"
-    ai_response = (
-        f"{reason}\n請問需要為您建立服務工單嗎？回覆「好」或「不用」。"
-    )
+    reason = decision.get("reason_to_user") or "這個問題交給真人客服會比較快"
+    ai_response = f"{reason}\n要幫您轉真人嗎？（回覆「好」或「不用」）"
     state["ticket_state"]["ticket_suggested"] = True
-    state["phase"] = "等待工單確認"
+    state["ticket_state"]["handoff_reason"] = "needs_human"
+    state["phase"] = "等待轉真人確認"
     state["escalation_signals"]["no_kb_match"] = state["escalation_signals"].get("no_kb_match", False)
     return _finalize_turn(
-        state, user_message, ai_response, "ticket_flow",
+        state, user_message, ai_response, "handoff_offer",
         increment_turn=True, did_customer_service=True, session_id=session_id,
     )
 
@@ -422,12 +430,46 @@ def _execute_continue_intent(state, user_message, decision, session_id) -> dict:
 
 
 def _execute_force_escalation(state, user_message, session_id) -> dict:
-    """unclear 連續達上限 → 強制建單，不再嘗試溝通。"""
+    """unclear 連續達上限 → 主動提議轉真人，不再嘗試溝通。"""
     state["ticket_state"]["ticket_suggested"] = True
-    state["phase"] = "等待工單確認"
+    state["ticket_state"]["handoff_reason"] = "unclear_limit"
+    state["phase"] = "等待轉真人確認"
     return _finalize_turn(
         state, user_message, FORCE_ESCALATION_MSG, "force_escalation",
         increment_turn=True, did_customer_service=False, session_id=session_id,
+    )
+
+
+def _execute_handoff(state, user_message, session_id) -> dict:
+    """使用者同意轉真人 → 講一句安撫話、設交接旗標與訊號後退場。
+
+    這是轉真人改版的核心：不建工單、不問 Email、不進「已結束」死路（那些已隨工單流程移除）。
+    安撫話字：HiSupport 有注入 handoff_message 就用注入的、否則用內建預設（兩者依約定應一致，
+    確保單機 HiBot 與正式 HiSupport 體驗相同）。摘要在 _build_handoff 依 handoff_reason 組出。
+    """
+    ts = state["ticket_state"]
+    ts["handed_off"] = True
+    ts["ticket_suggested"] = False
+    ts["user_decision"] = "accepted"
+    if not ts.get("handoff_reason"):
+        ts["handoff_reason"] = "user_request"
+    state["phase"] = "對話中"
+    msg = runtime_config.get_message("handoff_message", DEFAULT_HANDOFF_MSG)
+    return _finalize_turn(
+        state, user_message, msg, "handoff",
+        increment_turn=True, did_customer_service=False, session_id=session_id,
+    )
+
+
+def _handed_off_holding(state, user_message, session_id) -> dict:
+    """已交接後被繼續輸入時的固定回應（閉環）。
+
+    正式環境 HiSupport 已切真人、不會再把訊息送進 HiBot；純單機時用這個 holding 模擬，
+    維持 handoff 訊號、不打 LLM、不重問。increment_turn=False：已交接後不再累加輪數/上限。
+    """
+    return _finalize_turn(
+        state, user_message, HANDED_OFF_HOLDING_MSG, "handoff",
+        increment_turn=False, did_customer_service=False, session_id=session_id,
     )
 
 
@@ -485,7 +527,8 @@ def _faq_then_rag_executor(
         ai_response = no_kb_handler.respond(state, effective_message)
         state["escalation_signals"]["no_kb_match"] = True
         state["ticket_state"]["ticket_suggested"] = True
-        state["phase"] = "等待工單確認"
+        state["ticket_state"]["handoff_reason"] = "no_kb_match"
+        state["phase"] = "等待轉真人確認"
         state["faq_context"]["answer_strategy"] = "no_kb_match"
         state["kb_context"]["articles_used_in_response"] = []
         return _maybe_finalize(state, effective_message, ai_response, "no_kb_match", session_id)
@@ -503,8 +546,9 @@ def _faq_then_rag_executor(
     if ai_response.startswith("[SUGGEST_TICKET]"):
         ai_response = ai_response.replace("[SUGGEST_TICKET]", "", 1).strip()
         state["ticket_state"]["ticket_suggested"] = True
-        state["phase"] = "等待工單確認"
-        return _maybe_finalize(state, effective_message, ai_response, "ticket_flow", session_id)
+        state["ticket_state"]["handoff_reason"] = "needs_human"
+        state["phase"] = "等待轉真人確認"
+        return _maybe_finalize(state, effective_message, ai_response, "handoff_offer", session_id)
 
     return _maybe_finalize(state, effective_message, ai_response, "rag", session_id)
 
@@ -558,7 +602,6 @@ def _finalize_turn(
         state["turn_count"] += 1
     state["updated_at"] = now_iso()
 
-    check_and_update_limits(state)
     save_state(state)
 
     return _build_response(state, ai_response, response_type)
@@ -568,11 +611,11 @@ def _build_response(state: dict, ai_response: str, response_type: str) -> dict:
     return {
         "ai_response": ai_response,
         "response_type": response_type,
-        "show_ticket_button": (
-            state["ticket_state"]["ticket_suggested"]
-            and not state["ticket_state"]["ticket_id"]
-        ),
-        "ticket_id": state["ticket_state"].get("ticket_id"),
+        # 轉真人改版後不再有前端建單按鈕；欄位保留為相容舊呼叫端，恆為 False/None
+        "show_ticket_button": False,
+        "ticket_id": None,
+        # 轉真人交接訊號（給 HiSupport 讀；單機時 requested 為 False，不影響現況）
+        "handoff": build_handoff(state),
         "state": state,
     }
 
@@ -652,55 +695,3 @@ def _mark_current_answered(state: dict) -> None:
             break
 
 
-# ────────────────────────────────────────────────────────────────────
-# 服務上限
-# ────────────────────────────────────────────────────────────────────
-
-
-def check_and_update_limits(state: dict) -> None:
-    """每輪結束後檢查 service_limits 是否達上限。"""
-    sl = state["service_limits"]
-    if sl["limit_reached"]:
-        return
-
-    if state["turn_count"] >= sl["max_turns_per_session"]:
-        sl["limit_reached"] = True
-        sl["limit_reached_reason"] = "turn_max"
-    elif sl["off_topic_count"] >= sl["max_off_topic_count"]:
-        sl["limit_reached"] = True
-        sl["limit_reached_reason"] = "off_topic_max"
-    elif sl["low_confidence_count"] >= sl["max_low_confidence_count"]:
-        sl["limit_reached"] = True
-        sl["limit_reached_reason"] = "low_confidence_max"
-    elif sl["unresolved_count"] >= sl["max_unresolved_count"]:
-        sl["limit_reached"] = True
-        sl["limit_reached_reason"] = "unresolved_max"
-
-
-def _ended_session(state: dict) -> dict:
-    """phase=已結束 時的固定回應。"""
-    ticket_id = state["ticket_state"].get("ticket_id")
-    msg = (
-        f"您的工單已建立（#{ticket_id}），請耐心等候回覆。\n"
-        "若您還想再問新問題，請按右上方「新對話」按鈕重新開始。"
-        if ticket_id
-        else "本次對話已結束，若有新問題請按右上方「新對話」按鈕。"
-    )
-    append_message(state, "assistant", msg, response_type="session_ended")
-    state["turn_count"] += 1
-    state["updated_at"] = now_iso()
-    save_state(state)
-    return _build_response(state, msg, "session_ended")
-
-
-# ────────────────────────────────────────────────────────────────────
-# 對外 API（給 app.py 用）
-# ────────────────────────────────────────────────────────────────────
-
-
-def initiate_ticket_from_button(session_id: str) -> dict:
-    """前端「建立工單」按鈕觸發，跳過 yes/no 直接進入收 email / 建單。"""
-    state = load_state(session_id)
-    if state is None:
-        raise ValueError(f"找不到 session: {session_id}")
-    return ticket_handler.initiate(state)

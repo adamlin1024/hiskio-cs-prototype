@@ -2,11 +2,9 @@
 
 對外路由（只開 3 個 HTML 入口、其餘是 API）：
 - GET  /                       對話介面
-- GET  /admin                  後台
 - GET  /docs/guide             產品說明
 - POST /api/session/new        新建 session（會員/訪客）
-- POST /api/chat               送訊息、拿回應
-- POST /api/ticket/create      用戶按下「建立工單」按鈕觸發
+- POST /api/chat               送訊息、拿回應（回應含 handoff 轉真人訊號）
 
 啟動：
     uvicorn app:app --reload --port 8765
@@ -154,10 +152,6 @@ def chat(req: ChatReq):
     return orchestrator.handle_user_message(req.session_id, req.message)
 
 
-class TicketReq(BaseModel):
-    session_id: str
-
-
 @app.get("/api/admin/usage")
 def get_usage():
     """v6.2 token 統計（自上次 reset 以來）。"""
@@ -180,6 +174,7 @@ def reset_usage():
 
 class ConfigReq(BaseModel):
     prompts: dict[str, str] | None = None
+    messages: dict[str, str] | None = None  # HiSupport 推入對外訊息（如轉真人安撫話 handoff_message）
     thresholds: dict[str, int] | None = None
 
 
@@ -202,18 +197,13 @@ def set_config(req: ConfigReq):
         raise HTTPException(status_code=403, detail="設定注入需先設定 HIBOT_API_KEY 存取金鑰")
     from core import runtime_config
     return runtime_config.set_overlay(
-        {"prompts": req.prompts or {}, "thresholds": req.thresholds or {}},
+        {
+            "prompts": req.prompts or {},
+            "messages": req.messages or {},
+            "thresholds": req.thresholds or {},
+        },
         merge=True,
     )
-
-
-@app.post("/api/ticket/create")
-def create_ticket(req: TicketReq):
-    """前端「建立工單」按鈕觸發，跳過「好/不用」直接走收 email / 建單流程。"""
-    state = load_state(req.session_id)
-    if state is None:
-        raise HTTPException(status_code=404, detail=f"session {req.session_id} 不存在")
-    return orchestrator.initiate_ticket_from_button(req.session_id)
 
 
 @app.get("/health")
@@ -227,113 +217,11 @@ def root():
     return FileResponse(STATIC_DIR / "index.html")
 
 
-@app.get("/admin")
-def admin_page():
-    return FileResponse(STATIC_DIR / "admin.html")
-
-
 @app.get("/docs/guide")
 def guide_page():
     return FileResponse(STATIC_DIR / "guide.html")
 
 
-# ────────────────────────────────────────────────────────────────────
-# 後台 API（Phase 5）
-# ────────────────────────────────────────────────────────────────────
-
-_VALID_TICKET_STATUS = {"open", "in_progress", "closed"}
-
-
-@app.get("/api/admin/tickets")
-def list_tickets(status: str | None = None):
-    """工單列表。可用 status 參數過濾。"""
-    from core.state import _connect  # 避免在頂部循環依賴
-
-    sql = (
-        "SELECT ticket_id, session_id, user_email, user_id, is_member, "
-        "issue_category, issue_summary, user_emotion_at_close, status, "
-        "created_at, updated_at FROM tickets"
-    )
-    params: tuple = ()
-    if status:
-        if status not in _VALID_TICKET_STATUS:
-            raise HTTPException(status_code=400, detail=f"status 必須是 {_VALID_TICKET_STATUS}")
-        sql += " WHERE status = ?"
-        params = (status,)
-    sql += " ORDER BY ticket_id DESC"
-
-    with _connect() as conn:
-        rows = conn.execute(sql, params).fetchall()
-
-    tickets = []
-    for r in rows:
-        tickets.append({
-            "ticket_id": r["ticket_id"],
-            "session_id": r["session_id"],
-            "user_email": r["user_email"],
-            "user_id": r["user_id"],
-            "is_member": bool(r["is_member"]),
-            "issue_category": r["issue_category"],
-            "issue_summary": r["issue_summary"],
-            "user_emotion_at_close": r["user_emotion_at_close"],
-            "status": r["status"],
-            "created_at": r["created_at"],
-            "updated_at": r["updated_at"],
-        })
-    return {"tickets": tickets}
-
-
-@app.get("/api/admin/tickets/{ticket_id}")
-def get_ticket(ticket_id: int):
-    """單筆工單完整資料，含 full_chat_history。"""
-    from core.state import _connect
-
-    with _connect() as conn:
-        row = conn.execute(
-            "SELECT * FROM tickets WHERE ticket_id = ?", (ticket_id,)
-        ).fetchone()
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"找不到工單 #{ticket_id}")
-
-    chat_history = json.loads(row["full_chat_history"]) if row["full_chat_history"] else []
-    return {
-        "ticket_id": row["ticket_id"],
-        "session_id": row["session_id"],
-        "user_email": row["user_email"],
-        "user_id": row["user_id"],
-        "is_member": bool(row["is_member"]),
-        "issue_category": row["issue_category"],
-        "issue_summary": row["issue_summary"],
-        "user_emotion_at_close": row["user_emotion_at_close"],
-        "key_attempts": row["key_attempts"],
-        "status": row["status"],
-        "created_at": row["created_at"],
-        "updated_at": row["updated_at"],
-        "full_chat_history": chat_history,
-    }
-
-
-class TicketStatusReq(BaseModel):
-    status: str
-
-
-@app.post("/api/admin/tickets/{ticket_id}/status")
-def update_ticket_status(ticket_id: int, req: TicketStatusReq):
-    """標記工單為 open / in_progress / closed。"""
-    from core.state import _connect, now_iso
-
-    if req.status not in _VALID_TICKET_STATUS:
-        raise HTTPException(status_code=400, detail=f"status 必須是 {_VALID_TICKET_STATUS}")
-
-    with _connect() as conn:
-        cur = conn.execute(
-            "UPDATE tickets SET status = ?, updated_at = ? WHERE ticket_id = ?",
-            (req.status, now_iso(), ticket_id),
-        )
-        if cur.rowcount == 0:
-            raise HTTPException(status_code=404, detail=f"找不到工單 #{ticket_id}")
-    return {"ticket_id": ticket_id, "status": req.status}
-
-
-# v7.2 移除 /static mount：三份 HTML 都 self-contained，沒有 /static/* 對外資源需求。
-# 對外只暴露三個明確入口：/、/admin、/docs/guide
+# 工單後台（/admin + /api/admin/tickets*）已隨工單流程移除（2026-07-04 轉真人改版）。
+# 真人交接的摘要改由 HiSupport 端顯示，不再進 HiBot 的 tickets 表。
+# 對外只暴露兩個 HTML 入口：/（對話介面）、/docs/guide（產品說明）；其餘為 API。
