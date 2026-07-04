@@ -100,9 +100,10 @@ def test_decide_clear_yes_no_uses_rules_not_llm(db, monkeypatch):
         raise AssertionError("明確的好/不用不該呼叫 LLM")
 
     monkeypatch.setattr(ticket_handler, "call_fast", _boom)
-    for yes in ["好", "好的", "好啊", "可以", "要", "麻煩你", "OK", "是"]:
+    for yes in ["好", "好的", "好啊", "可以", "要", "麻煩你", "OK", "是",
+                "同意", "認同", "當然", "沒問題", "需要", "行"]:
         assert ticket_handler.decide(yes) == "Y", yes
-    for no in ["不用", "不要", "不需要", "算了", "先不用"]:
+    for no in ["不用", "不要", "不需要", "算了", "先不用", "不行", "不可以"]:
         assert ticket_handler.decide(no) == "N", no
 
 
