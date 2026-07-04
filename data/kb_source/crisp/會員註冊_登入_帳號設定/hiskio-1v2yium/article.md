@@ -1,0 +1,92 @@
+---
+title: "確保能正常收到 HiSKIO 重要通知信件"
+category: "會員註冊/登入/帳號設定"
+source_url: "https://help.hiskio.com/zh-tw/article/hiskio-1v2yium/"
+crisp_id: "1f80f073-81f1-4df3-b45e-16d65255bedb"
+status: 可見
+scraped_at: "2026-07-04T07:18:17.183Z"
+---
+
+有關的文章： [會員註冊/登入/帳號設定](/zh-tw/category/5pyd5zoh6ki75yaklezuwfpslulpomzoqk3lrpo-kn63pb/)
+
+# 確保能正常收到 HiSKIO 重要通知信件
+
+HiSKIO 會透過您在個人帳戶中留下的 Email 通知您課程更新、募資進度、最新資訊等訊息，若您無法正常收到信件，請先完成「 [信件驗證](https://hiskio.com/account/#email) 」，並可以參考下方設定，避免 HiSKIO 信件遭系統誤判為垃圾信件或促銷資訊，確保您可以正常收到 HiSKIO 的通知信件。
+
+  
+
+### Gmail
+
+  
+
+Step 1. 在 Gmail 最上方搜尋列輸入「@hiskio.com」並點選右側的下拉符號。
+
+  
+
+![](images/aa0516ad-a063-45e5-9382-b82046_1wv5k6p.png)
+
+  
+
+Step 2. 點選建立篩選器。
+
+  
+
+![](images/fd975efe-e7c8-49c5-88b1-153ef8_pt3z9v.png)
+
+  
+
+Step 3. 勾選「永不移至垃圾郵件」與「永遠將其標示為重要」，並點選「建立篩選器」即完成設定。
+
+  
+
+![](images/2219f2ff-aba8-4ab0-bb9c-b32a28_18vxcuh.png)
+
+  
+
+### yahoo! 電子信箱
+
+  
+
+Step 1. 點選 yahoo! 電子信箱右側的齒輪並點選「…更多設定」。
+
+  
+
+![](images/28d21b50-0c25-4b52-8d7e-42d6ad_1qyi0uk.png)
+
+  
+
+Step 2. 切換左側分頁至「自動分類規則」，自行命名名稱後，在下方寄件者中選取「包含」，並輸入「@hiskio.com」。
+
+  
+
+![](images/aaafd783-6821-48a6-8b3e-1f58c8_cxcc1b.png)
+
+  
+
+Step 3. 選取目標信件匣中選擇「收件匣」並店選儲存即完成設定。
+
+  
+
+![](images/ec260fde-e238-401f-b076-793880_zr4w50.png)
+
+  
+
+### Outlook
+
+  
+
+Step 1. 點選 Outlook 右上方的「齒輪」並點選下方「檢視所有 Outlook 設定」。
+
+  
+
+![](images/754880a1-668e-445e-9c0a-b89845_qvm170.png)
+
+  
+
+Step 2. 切換分頁至「郵件」、「垃圾郵件」，並在安全的寄件者與網域區塊點選「新增」輸入「hiskio.com」後按下 Enter 送出，完成後點選下方「儲存」即完成設定。
+
+  
+
+![](images/b9904f97-6e23-4bf0-a3ba-e32902_n3eo6k.png)
+
+更新時間： 16/03/2023

@@ -1,0 +1,334 @@
+{
+  "scraped_at": "2026-07-04T07:18:17.183Z",
+  "total_enumerated": 66,
+  "visible": 32,
+  "downloaded_ok": 32,
+  "failed": 0,
+  "hidden_skipped": 34,
+  "hidden_titles": [
+    "課程優惠",
+    "退款時間需要多久",
+    "關於發票",
+    "買錯課程 / 組合包",
+    "課程無法購買？系統跳出「很抱歉，您已購買過下列課程」提示？",
+    "我是海外人士，可以購買課程嗎？",
+    "課程付款",
+    "退費規定",
+    "課程購買",
+    "購買課程前，不確定課程內容是否符合需求時該怎麼辦?",
+    "三人同行「購買課程」方式",
+    "試閱課程",
+    "課程無法購買？系統跳出「你的購物車內已經有以下課程」提示？",
+    "HiSKIO 職人力系列課程簡介",
+    "課程付款說明",
+    "抵用券使用規範",
+    "抵用券使用方式",
+    "獲得及領取抵用券",
+    "什麼情況下抵用券會退回呢？",
+    "使用抵用券發票開立方式",
+    "抵用券查詢",
+    "抵用券可以轉移給其他人或其他帳號嗎？",
+    "抵用券簡介",
+    "HiSKIO 課程評價規範",
+    "我可以將課程下載至我的電腦嗎？",
+    "課程播放不順怎麼辦？",
+    "我購買的課程不見了？",
+    "帳號查詢",
+    "忘記密碼",
+    "註冊 HiSKIO 會員",
+    "社群登入綁定後，如何設定帳號密碼",
+    "社群登入失敗怎麼辦？",
+    "更改密碼",
+    "一般登入綁定社群帳號"
+  ],
+  "articles": [
+    {
+      "title": "統編發票｜申請與報帳指南",
+      "category": "課程購買",
+      "crisp_id": "15e2905d-8f29-4a8a-9003-762de905a9a1",
+      "public_url": "https://help.hiskio.com/zh-tw/article/57wx57eo55m856wo772c55sz6kul6iih5acx5biz5oyh5y2x-1vfmgpv/",
+      "status": "可見",
+      "path": "課程購買/57wx57eo55m856wo772c55sz6kul6iih5acx5biz5oyh5y2x-1vfmgpv",
+      "images": 3
+    },
+    {
+      "title": "關於電子發票",
+      "category": "課程購買",
+      "crisp_id": "22f06b28-4eb5-4ad3-8102-724b9b86dd85",
+      "public_url": "https://help.hiskio.com/zh-tw/article/6zec5pa86zu75a2q55m856wo-cmuoya/",
+      "status": "可見",
+      "path": "課程購買/6zec5pa86zu75a2q55m856wo-cmuoya",
+      "images": 0
+    },
+    {
+      "title": "退款入帳時間與我的錢包",
+      "category": "課程購買",
+      "crisp_id": "7214c027-984e-4e67-844b-23213ea2c074",
+      "public_url": "https://help.hiskio.com/zh-tw/article/6yca5qy5ywl5biz5pmc6zat6iih5oir55qe6yyi5yyf-1ec9kkm/",
+      "status": "可見",
+      "path": "課程購買/6yca5qy5ywl5biz5pmc6zat6iih5oir55qe6yyi5yyf-1ec9kkm",
+      "images": 0
+    },
+    {
+      "title": "退費規定｜如何申請退費",
+      "category": "課程購買",
+      "crisp_id": "a396cdb2-c8ca-4a8a-9ef3-70393260536a",
+      "public_url": "https://help.hiskio.com/zh-tw/article/6yca6lk76kap5a6a772c5aac5l2v55sz6kul6yca6lk7-1n22a1s/",
+      "status": "可見",
+      "path": "課程購買/6yca6lk76kap5a6a772c5aac5l2v55sz6kul6yca6lk7-1n22a1s",
+      "images": 0
+    },
+    {
+      "title": "如何購買課程",
+      "category": "課程購買",
+      "crisp_id": "5be78bec-c0c6-45a2-a5b3-0f2a821ab3cb",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5aac5l2v6lo86lk36kqy56il-1x03m17/",
+      "status": "可見",
+      "path": "課程購買/5aac5l2v6lo86lk36kqy56il-1x03m17",
+      "images": 4
+    },
+    {
+      "title": "課程付費",
+      "category": "課程購買",
+      "crisp_id": "bdd6291b-5b24-4086-ab3d-d21022badfbb",
+      "public_url": "https://help.hiskio.com/zh-tw/article/6kqy56il5luy6lk7-1wqjal6/",
+      "status": "可見",
+      "path": "課程購買/6kqy56il5luy6lk7-1wqjal6",
+      "images": 2
+    },
+    {
+      "title": "購買前如何確認課程適合我？",
+      "category": "課程購買",
+      "crisp_id": "6434d81b-bb24-4a91-a325-d1f6115b3353",
+      "public_url": "https://help.hiskio.com/zh-tw/article/6lo86lk35ymn5aac5l2v56k66kqn6kqy56il6ygp5zci5oir77yf-udkj42/",
+      "status": "可見",
+      "path": "課程購買/6lo86lk35ymn5aac5l2v56k66kqn6kqy56il6ygp5zci5oir77yf-udkj42",
+      "images": 5
+    },
+    {
+      "title": "收藏課程",
+      "category": "課程購買",
+      "crisp_id": "cfdf8844-5d1e-4dde-8090-e15f04b6a3ce",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5ps26jep6kqy56il-cpd2tg/",
+      "status": "可見",
+      "path": "課程購買/5ps26jep6kqy56il-cpd2tg",
+      "images": 2
+    },
+    {
+      "title": "課程募資",
+      "category": "課程購買",
+      "crisp_id": "a5166de9-2467-4bf3-bca7-024e5efe4f8c",
+      "public_url": "https://help.hiskio.com/zh-tw/article/6kqy56il5yuf6loh-dqfrtq/",
+      "status": "可見",
+      "path": "課程購買/6kqy56il5yuf6loh-dqfrtq",
+      "images": 2
+    },
+    {
+      "title": "關於電子書",
+      "category": "課程購買",
+      "crisp_id": "af6857f4-3b5e-40c4-a71e-1cee8b8a1d41",
+      "public_url": "https://help.hiskio.com/zh-tw/article/6zec5pa86zu75a2q5pu4-1f39ael/",
+      "status": "可見",
+      "path": "課程購買/6zec5pa86zu75a2q5pu4-1f39ael",
+      "images": 0
+    },
+    {
+      "title": "什麼是直播課程？",
+      "category": "課程購買",
+      "crisp_id": "5de18894-5ebd-4643-b9ee-fe93f2c18914",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5lua6bq85piv55u05pkt6kqy56il77yf-4medel/",
+      "status": "可見",
+      "path": "課程購買/5lua6bq85piv55u05pkt6kqy56il77yf-4medel",
+      "images": 0
+    },
+    {
+      "title": "取得抵用券與優惠規則",
+      "category": "抵用券與任務板",
+      "crisp_id": "a7ff0f1a-6b44-40ec-8bac-16bf33af57fa",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5yw5b6x5oq155so5yi46iih5ysq5oog6kap5ymh-1cvwnuy/",
+      "status": "可見",
+      "path": "抵用券與任務板/5yw5b6x5oq155so5yi46iih5ysq5oog6kap5ymh-1cvwnuy",
+      "images": 0
+    },
+    {
+      "title": "抵用券使用指南",
+      "category": "抵用券與任務板",
+      "crisp_id": "cf590935-e0a4-4a3c-a9d7-d6eb51fde2b2",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5oq155so5yi45l255so5oyh5y2x-bo92gv/",
+      "status": "可見",
+      "path": "抵用券與任務板/5oq155so5yi45l255so5oyh5y2x-bo92gv",
+      "images": 3
+    },
+    {
+      "title": "會有新的任務嗎？",
+      "category": "抵用券與任務板",
+      "crisp_id": "dcbc2a42-b44f-4c6c-9ca6-0d17c1987d01",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5pyd5pyj5paw55qe5lu75yuz5zeo77yf-vd0frm/",
+      "status": "可見",
+      "path": "抵用券與任務板/5pyd5pyj5paw55qe5lu75yuz5zeo77yf-vd0frm",
+      "images": 0
+    },
+    {
+      "title": "如何查看任務",
+      "category": "抵用券與任務板",
+      "crisp_id": "145ba74e-d8ed-4c5f-9ef9-645f8c4ab37a",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5aac5l2v5pl55yl5lu75yuz-1e8x4k6/",
+      "status": "可見",
+      "path": "抵用券與任務板/5aac5l2v5pl55yl5lu75yuz-1e8x4k6",
+      "images": 0
+    },
+    {
+      "title": "抵用券可以購買或儲值嗎？",
+      "category": "抵用券與任務板",
+      "crisp_id": "0c0e3613-b889-4449-ab95-65aef7081898",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5oq155so5yi45yv5lul6lo86lk35oiw5ysy5yc85zeo77yf-q8rqun/",
+      "status": "可見",
+      "path": "抵用券與任務板/5oq155so5yi45yv5lul6lo86lk35oiw5ysy5yc85zeo77yf-q8rqun",
+      "images": 0
+    },
+    {
+      "title": "任務板簡介",
+      "category": "抵用券與任務板",
+      "crisp_id": "f040f2e3-dc44-4e60-ae38-df7b70811107",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5lu75yuz5p257ch5lul-bjz9ic/",
+      "status": "可見",
+      "path": "抵用券與任務板/5lu75yuz5p257ch5lul-bjz9ic",
+      "images": 0
+    },
+    {
+      "title": "課程評價",
+      "category": "開始上課",
+      "crisp_id": "55620614-2949-42b5-b23f-58efec3cdf79",
+      "public_url": "https://help.hiskio.com/zh-tw/article/6kqy56il6kmv5yo5-rwghin/",
+      "status": "可見",
+      "path": "開始上課/6kqy56il6kmv5yo5-rwghin",
+      "images": 2
+    },
+    {
+      "title": "開始上課",
+      "category": "開始上課",
+      "crisp_id": "d93da7a3-c175-421d-8e35-294a2b65b793",
+      "public_url": "https://help.hiskio.com/zh-tw/article/6zal5ael5lik6kqy-1vkhafl/",
+      "status": "可見",
+      "path": "開始上課/6zal5ael5lik6kqy-1vkhafl",
+      "images": 3
+    },
+    {
+      "title": "影片播放問題排解",
+      "category": "開始上課",
+      "crisp_id": "a0a19d95-c42c-4b02-a6fc-568abe361413",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5b2x54mh5pkt5ps5zwp6agm5o6s6kej-15zaxsc/",
+      "status": "可見",
+      "path": "開始上課/5b2x54mh5pkt5ps5zwp6agm5o6s6kej-15zaxsc",
+      "images": 0
+    },
+    {
+      "title": "課程學習中遇到問題，該到哪裡尋求協助？",
+      "category": "開始上課",
+      "crisp_id": "1b5a3293-8199-405a-ac7c-6fbf8fcb6000",
+      "public_url": "https://help.hiskio.com/zh-tw/article/6kqy56il5a2457s5lit6ygh5yiw5zwp6agm77ym6kmy5yiw5zoq6koh5bcl5rgc5y2u5yqp77yf-1wvx0qk/",
+      "status": "可見",
+      "path": "開始上課/6kqy56il5a2457s5lit6ygh5yiw5zwp6agm77ym6kmy5yiw5zoq6koh5bcl5rgc5y2u5yqp77yf-1wvx0qk",
+      "images": 1
+    },
+    {
+      "title": "如何製作、查詢筆記",
+      "category": "開始上課",
+      "crisp_id": "017d684a-014c-435e-82c0-859471b53804",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5aac5l2v6ko95l2c44cb5pl6kmi562g6kiy-pjk8dl/",
+      "status": "可見",
+      "path": "開始上課/5aac5l2v6ko95l2c44cb5pl6kmi562g6kiy-pjk8dl",
+      "images": 3
+    },
+    {
+      "title": "完成課程後，會提供完課證明嗎？",
+      "category": "開始上課",
+      "crisp_id": "c90bde89-dbb8-4709-bd08-70ea81b41e64",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5a6m5oiq6kqy56il5b6m77ym5pyd5oq5l6b5a6m6kqy6k2j5pio5zeo77yf-fhfabi/",
+      "status": "可見",
+      "path": "開始上課/5a6m5oiq6kqy56il5b6m77ym5pyd5oq5l6b5a6m6kqy6k2j5pio5zeo77yf-fhfabi",
+      "images": 4
+    },
+    {
+      "title": "是否可以多人共享課程",
+      "category": "開始上課",
+      "crisp_id": "d9c6222b-ad7c-4ddc-9b1b-b30c9147dcbf",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5piv5zcm5yv5lul5asa5lq65ywx5lqr6kqy56il-l3q9vy/",
+      "status": "可見",
+      "path": "開始上課/5piv5zcm5yv5lul5asa5lq65ywx5lqr6kqy56il-l3q9vy",
+      "images": 0
+    },
+    {
+      "title": "密碼管理",
+      "category": "會員註冊/登入/帳號設定",
+      "crisp_id": "1d77a3a5-bb1e-4e64-ab62-61ceeb9458f2",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5ag56k8566h55cg-jle1qa/",
+      "status": "可見",
+      "path": "會員註冊_登入_帳號設定/5ag56k8566h55cg-jle1qa",
+      "images": 6
+    },
+    {
+      "title": "帳號查詢與「課程不見了」排解",
+      "category": "會員註冊/登入/帳號設定",
+      "crisp_id": "aa722fb8-166b-4228-836d-069916192a70",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5biz6jmf5pl6kmi6iih44cm6kqy56il5lin6kal5lqg44cn5o6s6kej-hipkzv/",
+      "status": "可見",
+      "path": "會員註冊_登入_帳號設定/5biz6jmf5pl6kmi6iih44cm6kqy56il5lin6kal5lqg44cn5o6s6kej-hipkzv",
+      "images": 4
+    },
+    {
+      "title": "登入方式與社群綁定",
+      "category": "會員註冊/登入/帳號設定",
+      "crisp_id": "aa50b3cb-5bf3-4683-af8a-b966586e45a9",
+      "public_url": "https://help.hiskio.com/zh-tw/article/55m75ywl5pa55byp6iih56s576k57ab5a6a-115db2d/",
+      "status": "可見",
+      "path": "會員註冊_登入_帳號設定/55m75ywl5pa55byp6iih56s576k57ab5a6a-115db2d",
+      "images": 5
+    },
+    {
+      "title": "課程帳號轉換",
+      "category": "會員註冊/登入/帳號設定",
+      "crisp_id": "33ff0f08-f931-41e0-8594-93aa9c0fae5f",
+      "public_url": "https://help.hiskio.com/zh-tw/article/6kqy56il5biz6jmf6l2j5ob-a89v2j/",
+      "status": "可見",
+      "path": "會員註冊_登入_帳號設定/6kqy56il5biz6jmf6l2j5ob-a89v2j",
+      "images": 0
+    },
+    {
+      "title": "確保能正常收到 HiSKIO 重要通知信件",
+      "category": "會員註冊/登入/帳號設定",
+      "crisp_id": "1f80f073-81f1-4df3-b45e-16d65255bedb",
+      "public_url": "https://help.hiskio.com/zh-tw/article/hiskio-1v2yium/",
+      "status": "可見",
+      "path": "會員註冊_登入_帳號設定/hiskio-1v2yium",
+      "images": 8
+    },
+    {
+      "title": "修改個人資料",
+      "category": "會員註冊/登入/帳號設定",
+      "crisp_id": "23deb60d-50ad-4a94-b3be-34c8d806f2a0",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5lu5ps55ycl5lq66loh5paz-x26q94/",
+      "status": "可見",
+      "path": "會員註冊_登入_帳號設定/5lu5ps55ycl5lq66loh5paz-x26q94",
+      "images": 1
+    },
+    {
+      "title": "請款條件及流程",
+      "category": "講師須知",
+      "crisp_id": "e8019320-88b9-4245-b598-e19659dc27e5",
+      "public_url": "https://help.hiskio.com/zh-tw/article/6kul5qy5qkd5lu25yk5rwb56il-1nec600/",
+      "status": "可見",
+      "path": "講師須知/6kul5qy5qkd5lu25yk5rwb56il-1nec600",
+      "images": 2
+    },
+    {
+      "title": "如何分潤課程收益給講師",
+      "category": "講師須知",
+      "crisp_id": "1f4f9490-1e27-4a18-90ce-444c3e766834",
+      "public_url": "https://help.hiskio.com/zh-tw/article/5aac5l2v5yig5r2k6kqy56il5ps255uk57wm6kyb5bir-z23c11/",
+      "status": "可見",
+      "path": "講師須知/5aac5l2v5yig5r2k6kqy56il5ps255uk57wm6kyb5bir-z23c11",
+      "images": 0
+    }
+  ]
+}
