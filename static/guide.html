@@ -471,9 +471,18 @@
     <p style="font-size:13px;color:#6b7280;">主動推進 pending intent — 這個能力 Haiku 完全勝任、不需要 Sonnet。</p>
   </div>
 
+  <!-- ────────── v8 note ────────── -->
+  <div style="margin:16px 0;padding:14px 16px;border-left:4px solid #0ea5e9;background:#f0f9ff;border-radius:6px;">
+    <strong>⚡ v8 — 一顆腦架構（2026-07-06,current main）</strong><br>
+    v7 的「流水線四站＋主管」已整組收斂為「程式守衛 → <strong>分診腦</strong>（一次呼叫直讀全部 FAQ＋KB 索引卡,輸出決定單）→ <strong>寫手</strong>」。
+    每輪 LLM 呼叫 5~7 次 → 1~2 次;每句 20~40 秒 → 約 3~11 秒;30 題驗收考卷 97%。
+    等級改名 triage／writer（DeepSeek V4 關思考）、新增每日訊息配額與「好吧」誤結案閘門、寫手安全守則不受人設注入覆蓋。
+    下方 v5～v7.3 沿革保留為歷史紀錄;完整架構單一真理見 <code>data/design-one-brain-2026-07-06.md</code>。
+  </div>
+
   <!-- ────────── v7.3 panel ────────── -->
   <div class="vpanel active" data-panel="v73">
-    <h3>v7.3 — 工單流程 → 轉真人交接（current main）</h3>
+    <h3>v7.3 — 工單流程 → 轉真人交接</h3>
     <p><strong>核心想法</strong>：把整套「開工單」流程整組拿掉，改成「轉真人交接」。AI 搞不定時只做四件事——<strong>判斷搞不定、生一份交接摘要、發出「轉真人」訊號、講一句安撫話後閉環退場</strong>；後續（通知客服、寄信、真人回覆）全部交給 HiSKIO 自建的客服平台 <strong>HiSupport</strong>。對話流程本身（FAQ／KB／離題／多重意圖／acknowledge）沿用 v7.2，沒有動。</p>
 
     <h4>為什麼要改</h4>

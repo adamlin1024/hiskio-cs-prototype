@@ -2,6 +2,32 @@
 
 每次重要更新（KB Review、規格升級、架構調整）追加在最上方。
 
+## 2026-07-06 — v8「一顆腦」架構收斂(P0~P4 完整落地)
+- 動機:①7/4 換 DeepSeek V4 後「查不到 KB/時好時壞/20~40 秒」——根因=V4 全系列自動思考,
+  思考 token 吃掉小額度呼叫(faq_matcher/kb_indexer max_tokens=100)→ 空答靜默失敗;
+  ②結構性病:每句 5~7 次串行 LLM(骰子相乘),主管只看站台紙條不看原件。
+  實測定案(26 題考卷 2×2+寫手盲測,Adam 親評):一顆腦×關思考完勝。
+- 作法(單一真理=`data/design-one-brain-2026-07-06.md`):
+  - **P0 接線**:provider 支援 `reasoning_enabled=false`(OpenRouter reasoning.enabled;
+    關了卻回思考 token 會記警告);等級改名 **triage/writer**(call_triage/call_writer);
+    triage=DeepSeek V4-Pro 關思考(考卷 26/26)、writer=V4-Flash 關思考(盲測冠軍)。
+  - **P1 分診腦**:新 `nodes/brain.py` 直讀全部 FAQ 問法表+KB 索引卡,一次輸出決定單
+    (含 user_satisfied「好吧」誤結案閘門、issue 同源輸出、幻覺編號白名單剔除→空手降級轉真人);
+    裁六站+話術站(entry_classifier/intent_clarity/faq_matcher 比對/kb_indexer 挑文/evaluator/
+    intent_selector/clarification/no_kb/off_topic/pipeline);state 殭屍欄位大掃除;
+    新增**每日訊息配額**(預設 30 句/日,超額=固定話術+提議轉真人、零 LLM,防洗版燒錢)。
+  - **P2 寫手**:防捏造鐵則+「先給解法再追問」+禁粗體;全節點掛新等級;拆過渡別名。
+  - **P3 驗收**:30 題考卷(含多輪/注入/好吧)29/30=97%、紅線零失誤;真實回放 10 筆全合理;
+    live E2E(HiSupport→HiBot)整輪 2.4~10.8s(原 20~40s)。
+    **live 抓到真漏洞並根治**:後台人設注入=整份蓋掉 system prompt → 改為
+    「人設(可覆寫)+`prompts/cs_response_guard.txt` 守則(永遠附加、不可蓋)」。
+- 影響:core/{orchestrator,state,llm_client,llm_providers,model_config,runtime_config}、
+  nodes/*、prompts/*、config/models.toml;測試 66→93 全綠;
+  驗收工具 scripts/run_routing_exam.py、run_replay_sample.py 入庫。
+- 對外契約(/api/chat handoff 訊號、/api/config 注入鍵)一字未動,HiSupport 端零改動。
+- 規格偏差備註:決定單 action 集拿掉 list_pending_intents(多意圖由腦直接處理,
+  「等待用戶選擇意圖」phase 作廢);continue_intent 帶有效編號=等效回答。
+
 ## 2026-07-04 — 工單流程 → 轉真人交接（配合 HiSupport 整合）
 - 動機：HiSupport 已定案「工單系統永久不做」，HiBot 搞不定 → 轉真人交接。HiBot 只負責「判斷＋摘要＋訊號＋閉環」，其餘（訊息、Email、通知真人）由 HiSupport 處理。並要求「單機 HiBot 體驗＝正式 HiSupport 體驗、只差介面」。
 - 作法（甲案：HiBot 講安撫話、HiSupport 推字）：

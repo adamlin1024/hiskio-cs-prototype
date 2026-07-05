@@ -5,19 +5,26 @@
 > 本檔只放本專案特有的穩定規則；**不列資料夾現有內容**（看現況）、**不堆歷史進度**（進規格文件）。
 
 ## 專案說明
-本地可跑的 AI 客服雛形，三段式流程：FAQ 快查 → RAG → 工單建立。
-- 完整規格書：`data/hiskio_cs_prototype_spec_v6.md`（最新版）
-- 歷史紀錄：`HISTORY.md`
+本地可跑的 AI 客服引擎(v8「一顆腦」架構):程式守衛 → 分診腦(直讀全部 FAQ+KB 索引卡,一次決定)→ 寫手。搞不定=轉真人交接(訊號給 HiSupport,不建工單)。
+- 架構單一真理:`data/design-one-brain-2026-07-06.md`(含決定單契約/轉真人三層/防捏造防線/驗收)
+- 舊規格書:`data/hiskio_cs_prototype_spec_v6.md`(v7 流水線時代,僅供考古)
+- 歷史紀錄:`HISTORY.md`
 
 ## 技術選型
 Python 3.11 + FastAPI + SQLite + **模型無關 LLM 層**（可插拔：直連 Anthropic 原廠、或走 OpenRouter 接各家模型）。
 - 呼叫收斂：`core/llm_client.py`（門面）→ `core/model_config.py`（等級解析）→ `core/llm_providers.py`（各家 provider）。
 - 「哪個等級用哪個模型」在 `config/models.toml` 設定；金鑰放 `.env`。改設定檔即可換模型，程式碼不動。
 - 等級（roles）：
-  - **reasoning**（聰明檔）— 對話、推理、生成工單摘要
-  - **fast**（快省檔）— 路由、分類、JSON 結構化抽取、FAQ 比對、KB 索引、評估
-- 節點呼叫 `call_reasoning()` / `call_fast()`（已移除 call_sonnet/call_haiku）。
-- 設計文件：`data/design-model-agnostic-llm-2026-07-03.md`。
+  - **triage**（分診腦）— 決策/挑文/轉真人判斷/好·不用語意備援(現用 DeepSeek V4-Pro 關思考)
+  - **fast 已改名 writer**（寫手）— KB 寫回覆、FAQ 潤飾、問候、確認回應(現用 DeepSeek V4-Flash 關思考)
+- 節點呼叫 `call_triage()` / `call_writer()`（call_reasoning/call_fast 已移除）。
+- `reasoning_enabled=false` 是事故根治,不可拿掉(DeepSeek 自動思考會偷吃回話額度→靜默失敗)。
+- 寫手安全守則在 `prompts/cs_response_guard.txt`,**永遠附加、不受後台人設注入覆蓋**。
+- 設計文件：`data/design-model-agnostic-llm-2026-07-03.md`(模型層)、`data/design-one-brain-2026-07-06.md`(架構)。
+
+## 驗收工具(打真 API,勿進 CI 常跑)
+- `scripts/run_routing_exam.py`:30 題分診考卷+寫作查核(換模型/改 prompt 後必跑,≥96% 且紅線零失誤)
+- `scripts/run_replay_sample.py`:真實對話回放抽測(人工抽查)
 
 ## 知識庫更新
 
@@ -28,7 +35,7 @@ Python 3.11 + FastAPI + SQLite + **模型無關 LLM 層**（可插拔：直連 A
 - KB 兩層分離：`data/kb_source/`（原稿）與 `data/kb/`（系統檔）
 - FAQ 兩層分離：`data/faq_source/`（原稿）與 `data/faq.json`（系統檔）
 - 追溯表：`data/kb_mapping.md` / `data/faq_mapping.md`（由 skill 自動維護）
-- KB / FAQ 變更後必重啟 server（`kb_indexer.py` 與 `faq_matcher.py` 都有 `lru_cache`）
+- KB / FAQ 變更後必重啟 server（`kb_indexer.py`/`faq_matcher.py`/`brain.py` 都有 `lru_cache`,分診腦的系統指令含整份索引卡）
 
 ## 開發習慣
 
