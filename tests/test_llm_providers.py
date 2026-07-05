@@ -61,12 +61,19 @@ class _Choice:
         self.message = _Msg(content)
 
 
+class _OADetails:
+    def __init__(self, reasoning_tokens):
+        self.reasoning_tokens = reasoning_tokens
+
+
 class _OAUsage:
-    def __init__(self, prompt_tokens, completion_tokens, cost=None):
+    def __init__(self, prompt_tokens, completion_tokens, cost=None, reasoning_tokens=None):
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
         if cost is not None:
             self.cost = cost
+        if reasoning_tokens is not None:
+            self.completion_tokens_details = _OADetails(reasoning_tokens)
 
 
 class _OAResp:
@@ -81,7 +88,8 @@ class _OAComps:
 
     def create(self, **kwargs):
         self.outer.last_kwargs = kwargs
-        return _OAResp("回你", _OAUsage(12, 7, cost=self.outer.cost))
+        return _OAResp("回你", _OAUsage(12, 7, cost=self.outer.cost,
+                                        reasoning_tokens=self.outer.reasoning_tokens))
 
 
 class _OAChat:
@@ -90,10 +98,11 @@ class _OAChat:
 
 
 class FakeOpenAIClient:
-    def __init__(self, cost=None):
+    def __init__(self, cost=None, reasoning_tokens=None):
         self.chat = _OAChat(self)
         self.last_kwargs = None
         self.cost = cost
+        self.reasoning_tokens = reasoning_tokens
 
 
 # ── Anthropic provider ────────────────────────────────────────────
@@ -159,3 +168,52 @@ def test_openai_compat_no_system_message_when_system_none():
     p = OpenAICompatProvider(client=fake, name="openrouter", base_url="http://x")
     p.complete(model="m", prompt="hi", max_tokens=10, temperature=0)
     assert fake.last_kwargs["messages"] == [{"role": "user", "content": "hi"}]
+
+
+# ── 關思考(reasoning_enabled)與思考偵測警報(規格 §5.1 / §14-3)────────
+def test_openai_compat_passes_reasoning_disabled():
+    """role 設 reasoning_enabled=false → 轉譯為 OpenRouter reasoning.enabled=false。"""
+    fake = FakeOpenAIClient()
+    p = OpenAICompatProvider(client=fake, name="openrouter", base_url="http://x")
+    p.complete(model="m", prompt="hi", max_tokens=10, temperature=0,
+               reasoning_enabled=False)
+    assert fake.last_kwargs["extra_body"]["reasoning"] == {"enabled": False}
+
+
+def test_openai_compat_omits_reasoning_key_when_not_set():
+    """沒設 reasoning_enabled(None)＝不帶參數,維持現況行為。"""
+    fake = FakeOpenAIClient()
+    p = OpenAICompatProvider(client=fake, name="openrouter", base_url="http://x")
+    p.complete(model="m", prompt="hi", max_tokens=10, temperature=0)
+    assert "reasoning" not in fake.last_kwargs.get("extra_body", {})
+
+
+def test_openai_compat_surfaces_reasoning_tokens():
+    """回應含思考 token 數 → 透出到 LLMResponse(供監控/驗收斷言)。"""
+    fake = FakeOpenAIClient(reasoning_tokens=42)
+    p = OpenAICompatProvider(client=fake, name="openrouter", base_url="http://x")
+    r = p.complete(model="m", prompt="hi", max_tokens=10, temperature=0)
+    assert r.reasoning_tokens == 42
+
+
+def test_openai_compat_warns_when_reasoning_sneaks_back(caplog):
+    """關了思考、供應端卻回思考 token → 記警告(供應端無視參數的警報)。"""
+    import logging
+    fake = FakeOpenAIClient(reasoning_tokens=99)
+    p = OpenAICompatProvider(client=fake, name="openrouter", base_url="http://x")
+    with caplog.at_level(logging.WARNING):
+        r = p.complete(model="m", prompt="hi", max_tokens=10, temperature=0,
+                       reasoning_enabled=False)
+    assert r.reasoning_tokens == 99
+    assert any("思考" in rec.message for rec in caplog.records)
+
+
+def test_anthropic_provider_ignores_reasoning_flag():
+    """Anthropic 原廠不吃這參數 → 優雅忽略、不外洩到 SDK kwargs。"""
+    fake = FakeAnthropicClient()
+    p = AnthropicNativeProvider(client=fake, name="anthropic")
+    r = p.complete(model="m", prompt="hi", max_tokens=10, temperature=0,
+                   reasoning_enabled=False)
+    assert r.text == "哈囉"
+    assert "reasoning" not in fake.last_kwargs
+    assert "reasoning_enabled" not in fake.last_kwargs

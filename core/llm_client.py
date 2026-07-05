@@ -1,11 +1,14 @@
 """LLM 對外門面（模型無關）。
 
-節點只喊「等級」(role)，不指定廠牌／型號：
-- call_reasoning(...) → 聰明檔（主對話、推理、工單摘要）
-- call_fast(...)      → 快省檔（路由、分類、抽取、判斷離題 …）
-- call_role(role,...) → 通用，之後要加第 3 級直接用這個
+節點只喊「等級」(role)，不指定廠牌／型號（一顆腦改版,規格 design-one-brain-2026-07-06 §5）：
+- call_triage(...) → 分診檔（分診腦決策、好/不用語意判斷、問候）
+- call_writer(...) → 寫手檔（KB 寫手、FAQ 潤飾、確認回應）
+- call_role(role,...) → 通用，之後要加新等級直接用這個
+- call_reasoning / call_fast → **過渡別名**（reasoning→triage、fast→writer），
+  P1/P2 呼叫點遷移完成後移除。
 
-背後用哪個供應商的哪個模型，由 config/models.toml 決定（見 core/model_config）。
+背後用哪個供應商的哪個模型，由 config/models.toml 決定（見 core/model_config）；
+role 層參數（如 reasoning_enabled=false 關思考）一路傳到 provider。
 本層負責：解析等級 → 呼叫 provider → 記錄用量 → 出錯回 fallback。
 """
 from __future__ import annotations
@@ -89,6 +92,8 @@ def call_role(
     try:
         reg = registry or get_registry()
         provider, model = reg.provider_for_role(role)
+        # role 層呼叫參數(如 reasoning_enabled);registry 不支援時視為無參數(向後相容)。
+        params = reg.params_for_role(role) if hasattr(reg, "params_for_role") else {}
         resp = provider.complete(
             model=model,
             prompt=prompt,
@@ -96,6 +101,7 @@ def call_role(
             temperature=temperature,
             system=system,
             cache_system=cache_system,
+            **params,
         )
     except Exception as e:
         logger.exception("呼叫模型失敗 (role=%s): %s", role, e)
@@ -109,11 +115,51 @@ def call_role(
         "output": resp.output_tokens,
         "cache_read": resp.cache_read_tokens,
         "cache_create": resp.cache_create_tokens,
+        "reasoning": getattr(resp, "reasoning_tokens", 0),
         "cost_usd": resp.cost_usd,
     })
     return resp.text
 
 
+def call_triage(
+    prompt: str,
+    *,
+    max_tokens: int = 600,
+    temperature: float = 0.0,
+    system: str | None = None,
+    cache_system: bool = False,
+    fallback: str = "",
+    registry=None,
+) -> str:
+    """分診檔：分診腦決策、好/不用語意判斷、問候。決策要穩 → 預設溫度 0。"""
+    return call_role(
+        "triage", prompt,
+        max_tokens=max_tokens, temperature=temperature,
+        system=system, cache_system=cache_system,
+        fallback=fallback, registry=registry,
+    )
+
+
+def call_writer(
+    prompt: str,
+    *,
+    max_tokens: int = 600,
+    temperature: float = 0.6,
+    system: str | None = None,
+    cache_system: bool = False,
+    fallback: str = "",
+    registry=None,
+) -> str:
+    """寫手檔：KB 寫手、FAQ 潤飾、確認回應。寫字要自然 → 預設溫度 0.6。"""
+    return call_role(
+        "writer", prompt,
+        max_tokens=max_tokens, temperature=temperature,
+        system=system, cache_system=cache_system,
+        fallback=fallback, registry=registry,
+    )
+
+
+# ── 過渡別名(P1/P2 呼叫點遷移完成後移除)────────────────────────────
 def call_reasoning(
     prompt: str,
     *,
@@ -124,9 +170,9 @@ def call_reasoning(
     fallback: str = "",
     registry=None,
 ) -> str:
-    """聰明檔：主對話、推理、工單摘要。"""
+    """【過渡別名】舊聰明檔 → 分診檔(triage)。新程式請用 call_triage/call_writer。"""
     return call_role(
-        "reasoning", prompt,
+        "triage", prompt,
         max_tokens=max_tokens, temperature=temperature,
         system=system, cache_system=cache_system,
         fallback=fallback, registry=registry,
@@ -143,9 +189,9 @@ def call_fast(
     fallback: str = "",
     registry=None,
 ) -> str:
-    """快省檔：路由、分類、抽取、判斷離題等輕量任務。"""
+    """【過渡別名】舊快省檔 → 寫手檔(writer)。新程式請用 call_triage/call_writer。"""
     return call_role(
-        "fast", prompt,
+        "writer", prompt,
         max_tokens=max_tokens, temperature=temperature,
         system=system, cache_system=cache_system,
         fallback=fallback, registry=registry,

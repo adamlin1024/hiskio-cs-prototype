@@ -7,8 +7,11 @@
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -22,6 +25,8 @@ class LLMResponse:
     model: str = ""
     provider: str = ""
     cost_usd: float | None = None
+    # 思考(reasoning)token 數：供監控與「關思考卻偷思考」警報用（規格 §14-3）。
+    reasoning_tokens: int = 0
 
 
 class LLMProvider:
@@ -29,7 +34,8 @@ class LLMProvider:
 
     def complete(self, *, model: str, prompt: str, max_tokens: int,
                  temperature: float, system: str | None = None,
-                 cache_system: bool = False) -> LLMResponse:
+                 cache_system: bool = False,
+                 reasoning_enabled: bool | None = None) -> LLMResponse:
         raise NotImplementedError
 
 
@@ -50,7 +56,8 @@ class AnthropicNativeProvider(LLMProvider):
         return self._client
 
     def complete(self, *, model, prompt, max_tokens, temperature,
-                 system=None, cache_system=False):
+                 system=None, cache_system=False, reasoning_enabled=None):
+        # reasoning_enabled 是 OpenAI 相容端點(OpenRouter)專用參數;原廠 SDK 不吃 → 優雅忽略。
         client = self._get_client()
         kwargs: dict[str, Any] = {
             "model": model,
@@ -108,7 +115,7 @@ class OpenAICompatProvider(LLMProvider):
         return self._client
 
     def complete(self, *, model, prompt, max_tokens, temperature,
-                 system=None, cache_system=False):
+                 system=None, cache_system=False, reasoning_enabled=None):
         client = self._get_client()
         messages: list[dict[str, str]] = []
         if system:
@@ -120,9 +127,15 @@ class OpenAICompatProvider(LLMProvider):
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
+        extra_body: dict[str, Any] = {}
         if self._cost_from_response:
             # OpenRouter 需明確要求(usage.include)才會回傳實際費用；否則 usage.cost 不存在。
-            create_kwargs["extra_body"] = {"usage": {"include": True}}
+            extra_body["usage"] = {"include": True}
+        if reasoning_enabled is not None:
+            # 混合思考模型(DeepSeek V4 等)的思考開關。關思考=2026-07-04 事故根治(規格 §1.1/§5.1)。
+            extra_body["reasoning"] = {"enabled": bool(reasoning_enabled)}
+        if extra_body:
+            create_kwargs["extra_body"] = extra_body
         if self._timeout is not None and self._timeout > 0:
             create_kwargs["timeout"] = self._timeout
         resp = client.chat.completions.create(**create_kwargs)
@@ -132,6 +145,15 @@ class OpenAICompatProvider(LLMProvider):
         cost = None
         if self._cost_from_response and usage is not None:
             cost = getattr(usage, "cost", None)
+        details = getattr(usage, "completion_tokens_details", None)
+        reasoning_tokens = (getattr(details, "reasoning_tokens", 0) or 0) if details else 0
+        if reasoning_enabled is False and reasoning_tokens > 0:
+            # 供應端無視關思考參數的警報(規格 §14-3):思考偷跑=延遲/成本/截斷風險回歸。
+            logger.warning(
+                "已要求關閉思考,但供應端回報思考 token=%d(model=%s)——"
+                "OpenRouter 路由可能無視 reasoning 參數,請檢查供應商路由或鎖定供應商。",
+                reasoning_tokens, model,
+            )
         return LLMResponse(
             text=text,
             input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
@@ -139,4 +161,5 @@ class OpenAICompatProvider(LLMProvider):
             model=model,
             provider=self.name,
             cost_usd=cost,
+            reasoning_tokens=reasoning_tokens,
         )

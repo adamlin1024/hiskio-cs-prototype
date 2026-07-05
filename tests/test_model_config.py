@@ -9,6 +9,7 @@ from core.model_config import (
     load_config,
     missing_api_keys,
     resolve_role,
+    resolve_role_params,
 )
 
 CONFIG = {
@@ -114,13 +115,46 @@ def test_missing_api_keys_only_checks_used_providers(monkeypatch):
 
 
 def test_load_config_reads_shipped_default_file():
-    """出貨的 config/models.toml 應可讀，且 reasoning / fast 兩等級都指向已定義的 provider。
+    """出貨的 config/models.toml 應可讀，且 triage / writer 兩等級都指向已定義的 provider。
 
     刻意用結構檢查、不寫死模型名——換模型是常態操作，不該每次換都紅。
     """
     cfg = load_config()
-    for role in ("reasoning", "fast"):
+    for role in ("triage", "writer"):
         assert role in cfg["roles"], f"缺少等級 {role}"
         spec = cfg["roles"][role]
         assert spec["provider"] in cfg["providers"], f"{role} 指向未定義的 provider"
         assert spec["model"], f"{role} 的 model 不可為空"
+
+
+# ── role 層呼叫參數(reasoning_enabled,規格 §5)──────────────────
+def test_resolve_role_params_reads_whitelisted_keys():
+    cfg = {"roles": {
+        "writer": {"provider": "openrouter", "model": "m", "reasoning_enabled": False},
+        "triage": {"provider": "openrouter", "model": "n"},
+    }}
+    assert resolve_role_params("writer", cfg) == {"reasoning_enabled": False}
+    assert resolve_role_params("triage", cfg) == {}
+
+
+def test_resolve_role_params_ignores_unknown_keys():
+    cfg = {"roles": {"writer": {"provider": "p", "model": "m", "hack": 1}}}
+    assert resolve_role_params("writer", cfg) == {}
+
+
+def test_registry_params_for_role():
+    cfg = {
+        "providers": {"openrouter": {"type": "openai_compat", "base_url": "u"}},
+        "roles": {"writer": {"provider": "openrouter", "model": "m", "reasoning_enabled": False}},
+    }
+    reg = ModelRegistry(cfg)
+    assert reg.params_for_role("writer") == {"reasoning_enabled": False}
+
+
+def test_shipped_config_disables_reasoning_on_both_roles():
+    """出貨設定:兩等級都必須關思考(事故根治,規格 §1.1/§5)。"""
+    cfg = load_config()
+    for role in ("triage", "writer"):
+        assert cfg["roles"][role].get("reasoning_enabled") is False, (
+            f"{role} 未關思考——DeepSeek 自動思考會偷吃額度(2026-07-04 事故)"
+        )

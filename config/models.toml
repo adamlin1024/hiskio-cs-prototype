@@ -1,10 +1,18 @@
-# HiBot 模型分派設定
+# HiBot 模型分派設定(一顆腦改版,規格 data/design-one-brain-2026-07-06.md §5)
 # ─────────────────────────────────────────────────────────────
-# 改這個檔就能換模型／改分派，程式碼不用動。改完重啟 server 生效。
-# 金鑰(API key)不寫在這裡，只寫「環境變數名」；真正的金鑰放 .env。
+# 改這個檔就能換模型／改分派,程式碼不用動。改完重啟 server 生效。
+# 金鑰(API key)不寫在這裡,只寫「環境變數名」;真正的金鑰放 .env。
 #
-# 現用：reasoning→DeepSeek V4 Pro、fast→DeepSeek V4 Flash（都走 OpenRouter）。
-# 要換回 Claude 原廠：把下面 [roles.*] 的 provider/model 改回註解裡的 Claude 值即可。
+# 現用(2026-07-06 考卷定案):
+#   triage(分診腦) → DeepSeek V4 Pro 關思考(26 題考卷 26/26 滿分)
+#   writer(寫手)   → DeepSeek V4 Flash 關思考(Adam 盲測規則題冠軍、零捏造、全場最低價)
+# 備胎(考卷永久有效,隨時重考換手):
+#   分診:google/gemini-2.5-flash-lite(25/26,最便宜最快)/ claude-haiku-4-5-20251001
+#   寫手:google/gemini-2.5-flash-lite
+#
+# ⚠ reasoning_enabled = false 是 2026-07-04 事故的根治:DeepSeek V4 全系列會「自動思考」,
+#   思考 token 計入回話額度 → 小額度呼叫被吃光變空答(靜默失敗)。關思考=快、穩、便宜。
+#   供應端若無視此參數,接線層會記警告(core/llm_providers.py)。
 
 # ── 供應商定義 ──────────────────────────────────────────────
 [providers.anthropic]
@@ -16,31 +24,20 @@ type        = "openai_compat"
 base_url    = "https://openrouter.ai/api/v1"
 api_key_env = "OPENROUTER_API_KEY"
 
-# 想直連 OpenAI 官方時可解除下面註解：
-# [providers.openai]
-# type              = "openai_compat"
-# base_url          = "https://api.openai.com/v1"
-# api_key_env       = "OPENAI_API_KEY"
-# cost_from_response = false   # 直連 OpenAI 官方建議設 false（不支援 OpenRouter 的 usage.include）
-
 # ── 等級 → 用哪個供應商的哪個模型 ───────────────────────────
-[roles.reasoning]   # 聰明檔：主對話 / 推理 / 工單摘要
-provider = "openrouter"
-model    = "deepseek/deepseek-v4-pro-20260423"
-# 換回 Claude：provider = "anthropic" / model = "claude-sonnet-4-6"
+[roles.triage]      # 分診腦:決策/挑文/轉真人判斷;也供 好/不用 語意備援、問候
+provider          = "openrouter"
+model             = "deepseek/deepseek-v4-pro-20260423"
+reasoning_enabled = false   # 關思考=考卷滿分關鍵;開思考=事故行為(24/26+格式損毀)
 
-[roles.fast]        # 快省檔：路由 / 分類 / 抽取 / 判斷離題 …
-provider = "openrouter"
-model    = "deepseek/deepseek-v4-flash-20260423"
-# 換回 Claude：provider = "anthropic" / model = "claude-haiku-4-5-20251001"
+[roles.writer]      # 寫手:KB 全文寫回覆、FAQ 開場收尾潤飾、確認回應
+provider          = "openrouter"
+model             = "deepseek/deepseek-v4-flash-20260423"
+reasoning_enabled = false
 
-# 範例：把聰明檔換成走 OpenRouter 的 GPT，只要改成
-#   provider = "openrouter"
-#   model    = "openai/gpt-5"
-
-# ── 價目表（USD / 百萬 token）─────────────────────────────
-# 給「供應商沒回傳實際費用」的模型算成本用（例如直連 Anthropic）。
-# 走 OpenRouter 時通常會回傳真實費用，會優先採用、不看這張表。
+# ── 價目表(USD / 百萬 token)─────────────────────────────
+# 給「供應商沒回傳實際費用」的模型算成本用(例如直連 Anthropic)。
+# 走 OpenRouter 時通常會回傳真實費用,會優先採用、不看這張表。
 [pricing."claude-sonnet-4-6"]
 input        = 3.0
 output       = 15.0
@@ -53,8 +50,8 @@ output       = 4.0
 cache_read   = 0.08
 cache_create = 1.0
 
-# DeepSeek V4（走 OpenRouter，通常回傳真實費用；此表僅備援）
-# 註：DeepSeek 官方有「北京上班時段 2× 尖峰價」，OpenRouter 是否照加以帳單為準。
+# DeepSeek V4(走 OpenRouter,通常回傳真實費用;此表僅備援)
+# 註:DeepSeek 官方有「北京上班時段 2× 尖峰價」,OpenRouter 是否照加以帳單為準。
 [pricing."deepseek/deepseek-v4-pro-20260423"]
 input  = 0.435
 output = 0.87
@@ -62,3 +59,7 @@ output = 0.87
 [pricing."deepseek/deepseek-v4-flash-20260423"]
 input  = 0.09
 output = 0.18
+
+[pricing."google/gemini-2.5-flash-lite"]
+input  = 0.10
+output = 0.40

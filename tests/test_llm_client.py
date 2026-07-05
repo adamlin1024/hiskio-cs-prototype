@@ -21,13 +21,19 @@ class FakeProvider:
 
 
 class FakeRegistry:
-    def __init__(self, provider, model="fake-model"):
+    def __init__(self, provider, model="fake-model", role_params=None):
         self._p = provider
         self._m = model
         self.pricing_table: dict[str, dict] = {}
+        self.role_params = role_params or {}
+        self.last_role = None
 
     def provider_for_role(self, role):
+        self.last_role = role
         return self._p, self._m
+
+    def params_for_role(self, role):
+        return dict(self.role_params)
 
     def pricing(self, model):
         return self.pricing_table.get(model)
@@ -91,16 +97,43 @@ def test_usage_summary_marks_cost_unknown_when_no_cost_no_pricing():
     assert summary["by_model"]["mystery-model"]["cost_known"] is False
 
 
-def test_call_reasoning_and_fast_use_expected_defaults():
+def test_call_triage_and_writer_route_to_new_roles():
+    """新門面:call_triage → 等級 triage;call_writer → 等級 writer(規格 §5)。"""
+    prov = FakeProvider(response=LLMResponse(
+        text="ok", model="fake-model", provider="fakeprov"))
+    reg = FakeRegistry(prov)
+    assert llm_client.call_triage("hi", registry=reg) == "ok"
+    assert reg.last_role == "triage"
+    assert prov.last_call["max_tokens"] == 600
+    assert prov.last_call["temperature"] == 0.0
+    llm_client.call_writer("hi", registry=reg)
+    assert reg.last_role == "writer"
+    assert prov.last_call["max_tokens"] == 600
+    assert prov.last_call["temperature"] == 0.6
+
+
+def test_legacy_aliases_map_to_new_roles():
+    """過渡別名(P1/P2 收尾後移除):call_reasoning→triage、call_fast→writer,預設值不變。"""
     prov = FakeProvider(response=LLMResponse(
         text="ok", model="fake-model", provider="fakeprov"))
     reg = FakeRegistry(prov)
     assert llm_client.call_reasoning("hi", registry=reg) == "ok"
+    assert reg.last_role == "triage"
     assert prov.last_call["max_tokens"] == 600
     assert prov.last_call["temperature"] == 0.6
     llm_client.call_fast("hi", registry=reg)
+    assert reg.last_role == "writer"
     assert prov.last_call["max_tokens"] == 200
     assert prov.last_call["temperature"] == 0.0
+
+
+def test_call_role_passes_role_params_to_provider():
+    """models.toml 的 role 參數(reasoning_enabled=false)要一路傳到 provider。"""
+    prov = FakeProvider(response=LLMResponse(
+        text="ok", model="fake-model", provider="fakeprov"))
+    reg = FakeRegistry(prov, role_params={"reasoning_enabled": False})
+    llm_client.call_role("triage", "hi", max_tokens=10, temperature=0, registry=reg)
+    assert prov.last_call["reasoning_enabled"] is False
 
 
 def test_load_prompt_still_works():

@@ -38,6 +38,16 @@ def resolve_role(role: str, config: dict) -> tuple[str, str]:
     return r["provider"], r["model"]
 
 
+# role 層可帶的「呼叫參數」白名單(設定檔 [roles.*] 內的額外鍵;白名單外一律忽略)。
+_ROLE_PARAM_KEYS = {"reasoning_enabled"}
+
+
+def resolve_role_params(role: str, config: dict) -> dict:
+    """等級 → 呼叫參數 dict(如 {"reasoning_enabled": False});沒設＝空 dict(維持現況)。"""
+    r = config["roles"][role]
+    return {k: r[k] for k in _ROLE_PARAM_KEYS if k in r}
+
+
 def build_provider(provider_name: str, config: dict) -> LLMProvider:
     spec = config["providers"][provider_name]
     ptype = spec["type"]
@@ -87,6 +97,10 @@ class ModelRegistry:
         if provider_name not in self._providers:
             self._providers[provider_name] = build_provider(provider_name, self._config)
         return self._providers[provider_name], model
+
+    def params_for_role(self, role: str) -> dict:
+        """等級的呼叫參數(白名單過濾;如 reasoning_enabled)。"""
+        return resolve_role_params(role, self._config)
 
     def pricing(self, model: str) -> dict | None:
         return get_pricing(model, self._config)
