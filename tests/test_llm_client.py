@@ -138,5 +138,5 @@ def test_call_role_passes_role_params_to_provider():
 
 def test_load_prompt_still_works():
     # 既有 prompts/ 模板應照舊可讀
-    text = llm_client.load_prompt("entry_classifier")
+    text = llm_client.load_prompt("cs_response_system")
     assert isinstance(text, str) and len(text) > 0

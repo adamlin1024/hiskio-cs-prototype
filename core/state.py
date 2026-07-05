@@ -35,70 +35,55 @@ def new_state(user_info: dict | None = None) -> dict:
     if user_info:
         default_user.update(user_info)
 
+    # v8 一顆腦改版(規格 data/design-one-brain-2026-07-06.md §7):
+    # 殭屍欄位大掃除——已刪 escalation_signals 整塊、intent_clarity、input_classification、
+    # awaiting_selection、low_confidence_count/unresolved_count、match_confidence、
+    # indexed_articles、sub_category(全為「無人讀寫」或隨裁站作廢;證據見規格)。
+    # issue_context 改由分診腦每輪順手輸出(同源);Adam 拍板無舊對話相容需求。
     return {
         "session_id": str(uuid.uuid4()),
         "created_at": ts,
         "updated_at": ts,
-        "phase": "對話中",
+        "phase": "對話中",                    # 現役值:對話中|等待轉真人確認(其餘一律防呆映射回對話中)
         "turn_count": 0,
         "user_info": default_user,
+        # 交接摘要原料(分診腦每輪填;build_handoff_summary 讀)
         "issue_context": {
             "category": None,
-            "sub_category": None,
             "summary": None,
             "user_emotion": "中性",
         },
+        # 「這句用了哪份資料」紀錄(除錯/回放對帳)
         "faq_context": {
             "matched_faq_id": None,
-            "match_confidence": 0.0,
-            "answer_strategy": None,
+            "answer_strategy": None,          # faq_template | rag | None
         },
         "kb_context": {
-            "indexed_articles": [],
             "articles_used_in_response": [],
         },
-        # 服務計數（2026-07-04 清理：移除只算不觸發的死碼——max_turns_per_session「20 輪」、
-        # 低信心/未解決上限、limit_reached/limit_reached_reason）。
-        # 目前唯一會觸發動作的是離題：off_topic_count 達 max_off_topic_count → off_topic_blocked。
-        # low_confidence_count／unresolved_count 僅由 evaluator 累計、供主管當軟參考，不觸發動作。
+        # 服務計數:離題超限 → off_topic_blocked;每日配額(規格 §14-8)超限 → 提議轉真人
         "service_limits": {
             "max_off_topic_count": runtime_config.get_threshold("max_off_topic_count", 3),
             "off_topic_count": 0,
-            "low_confidence_count": 0,
-            "unresolved_count": 0,
+            "daily_date": None,               # 每日配額歸屬日(跨日自動重置)
+            "daily_count": 0,
         },
-        # 轉真人交接狀態（2026-07-04 改版；舊工單欄位 collecting_email/email_attempts/
-        # ticket_id/ticket_created_at 已移除，封存見 handoff-contract §7）
+        # 轉真人交接狀態（2026-07-04 改版；舊工單欄位封存見 handoff-contract §7）
         "ticket_state": {
             "ticket_suggested": False,   # AI 是否已提議轉真人（等待用戶確認）
             "user_decision": None,       # accepted／declined／null
             "handed_off": False,         # 已交接真人＝True → 閉環、回應 handoff.requested=True
-            "handoff_reason": None,      # no_kb_match／unclear_limit／needs_human／user_request
+            "handoff_reason": None,      # no_kb_match／unclear_limit／needs_human／user_request／daily_limit
         },
-        # v4 新增 + v4.1 重設計：入口分類 + 意圖追蹤
+        # 意圖追蹤(由分診腦決定單輸出、orchestrator 推進)
         "intent_state": {
-            "input_classification": None,      # greeting | unclear | off_topic | customer_service | None
             "consecutive_unclear_count": 0,
-            "max_unclear_count": 2,            # 第 3 次 unclear 強制建單
+            "max_unclear_count": 2,            # 第 3 次 unclear 強制提議轉真人
             "greeting_count": 0,
             "max_greeting_count": 3,
-            "intent_clarity": None,            # simple | ambiguous_subordinate | parallel_multiple | None
-            "awaiting_selection": False,       # 是否在等用戶從多重意圖中選擇
-            # v4.1 新模型：捨棄 primary/secondary/pending 三個欄位，改用：
             "current_intent": None,            # 現在正在跟用戶討論的意圖文字
-            "intent_log": [],                  # 整個 session 偵測到的所有意圖
-                                               # 每項：{"text": str, "status": str, "first_turn": int}
+            "intent_log": [],                  # 每項:{"text","status","role","in_scope","first_turn"}
                                                # status: pending | in_progress | answered | confirmed_resolved
-        },
-        # v4 新增：升級信號（與 service_limits 並列，但職責不同）
-        # service_limits 是定量上限（輪數/離題次數等），escalation_signals 是質性事件
-        "escalation_signals": {
-            "user_explicitly_requested_human": False,
-            "ai_low_confidence_count": 0,
-            "off_topic_count": 0,
-            "issue_complexity_high": False,
-            "user_anger_threshold_hit": False,
-            "no_kb_match": False,              # KB 索引完全空陣列時設 True
         },
         "chat_history": [],
     }
@@ -180,6 +165,7 @@ _HANDOFF_REASON_LABEL = {
     "unclear_limit": "多次無法理解用戶問題",
     "user_request": "用戶主動要求真人",
     "needs_human": "需要真人協助",
+    "daily_limit": "當日訊息量達上限（防資源濫用）",
 }
 
 

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 _lock = threading.Lock()
 
 # 允許注入的白名單（防止亂塞、也讓「開放範圍」明確可控）
-_THRESHOLD_KEYS = {"max_off_topic_count", "max_unclear"}
+_THRESHOLD_KEYS = {"max_off_topic_count", "max_unclear", "max_daily_messages"}
 _PROMPT_KEYS = {"cs_response_system"}
 _MESSAGE_KEYS = {"handoff_message"}  # 轉真人安撫話（＝HiSupport 後台「期待管理訊息」推來的字）
 _MAX_PROMPT_CHARS = 8000  # 注入人設長度上限，防有人塞超長 prompt 灌爆每輪成本
