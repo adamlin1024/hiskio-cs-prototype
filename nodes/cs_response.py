@@ -13,7 +13,8 @@ from core.text_utils import format_recent_history
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_TPL = load_prompt("cs_response_system")
+_SYSTEM_TPL = load_prompt("cs_response_system")   # 人設與語氣(後台可注入覆寫)
+_GUARD_TPL = load_prompt("cs_response_guard")     # 防捏造鐵則+任務+標記規則(不可覆寫)
 _USER_TPL = load_prompt("cs_response_user")
 
 
@@ -41,9 +42,12 @@ def respond(state: dict, kb_articles: list[dict], user_message: str) -> str:
     user = state["user_info"]
     issue = state["issue_context"]
 
-    # static 部分（角色、任務、規則）→ 可被 prompt cache 命中
-    # 人設可由 HiSupport 注入覆寫；沒注入＝檔案預設（byte 相同、行為不變）。
-    system_prompt = runtime_config.get_prompt_override("cs_response_system") or _SYSTEM_TPL
+    # static 部分（角色、任務、規則）→ 可被 prompt cache 命中。
+    # 組成＝「人設(後台可注入覆寫) + 守則(永遠附加、不可被蓋)」——
+    # 2026-07-06 live 實測抓到的漏洞根治:舊設計注入=整份蓋掉,一行簡短人設就把
+    # 防捏造鐵則/禁粗體全洗掉;改為人設歸人設、安全守則永遠生效。
+    persona = runtime_config.get_prompt_override("cs_response_system") or _SYSTEM_TPL
+    system_prompt = persona.rstrip() + "\n\n" + _GUARD_TPL
 
     # dynamic 部分（用戶狀態、KB 文章、歷史、訊息）每輪都不同
     user_prompt = _USER_TPL.format(

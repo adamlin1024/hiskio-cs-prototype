@@ -9,3 +9,7 @@ data/runtime_config.json
 data/conversations.json
 .pytest_cache/
 .DS_Store
+
+data/_exam_report_latest.txt
+data/_replay_report_latest.txt
+data/_server_log.txt
