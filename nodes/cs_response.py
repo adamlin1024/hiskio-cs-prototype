@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 
 from core import runtime_config
-from core.llm_client import call_reasoning, load_prompt
+from core.llm_client import call_writer, load_prompt
 from core.text_utils import format_recent_history
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ def respond(state: dict, kb_articles: list[dict], user_message: str) -> str:
     )
 
     fallback = "抱歉，目前系統有點忙不過來，請您稍後再試一次。"
-    return call_reasoning(
+    return call_writer(
         user_prompt,
         max_tokens=600,
         temperature=0.6,

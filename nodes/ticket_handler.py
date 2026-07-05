@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import re
 
-from core.llm_client import call_fast
+from core.llm_client import call_triage
 from core.state import append_message, build_handoff, now_iso, save_state
 
 logger = logging.getLogger(__name__)
@@ -77,7 +77,7 @@ def decide(user_message: str) -> str:
         return "N"
     if _YES_RE.match(msg):
         return "Y"
-    raw = call_fast(
+    raw = call_triage(
         _DECISION_PROMPT.format(user_message=user_message),
         max_tokens=5,
         temperature=0.0,

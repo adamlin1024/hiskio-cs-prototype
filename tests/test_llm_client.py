@@ -1,4 +1,4 @@
-"""門面測試：call_role/call_reasoning/call_fast + 用量/成本統計。
+"""門面測試：call_role/call_triage/call_writer + 用量/成本統計。
 
 用注入的 FakeRegistry/FakeProvider，不打真 API。
 """
@@ -110,21 +110,6 @@ def test_call_triage_and_writer_route_to_new_roles():
     assert reg.last_role == "writer"
     assert prov.last_call["max_tokens"] == 600
     assert prov.last_call["temperature"] == 0.6
-
-
-def test_legacy_aliases_map_to_new_roles():
-    """過渡別名(P1/P2 收尾後移除):call_reasoning→triage、call_fast→writer,預設值不變。"""
-    prov = FakeProvider(response=LLMResponse(
-        text="ok", model="fake-model", provider="fakeprov"))
-    reg = FakeRegistry(prov)
-    assert llm_client.call_reasoning("hi", registry=reg) == "ok"
-    assert reg.last_role == "triage"
-    assert prov.last_call["max_tokens"] == 600
-    assert prov.last_call["temperature"] == 0.6
-    llm_client.call_fast("hi", registry=reg)
-    assert reg.last_role == "writer"
-    assert prov.last_call["max_tokens"] == 200
-    assert prov.last_call["temperature"] == 0.0
 
 
 def test_call_role_passes_role_params_to_provider():

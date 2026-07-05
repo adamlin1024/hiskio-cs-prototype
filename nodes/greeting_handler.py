@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 
-from core.llm_client import call_fast, load_prompt
+from core.llm_client import call_writer, load_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -19,4 +19,4 @@ def respond(state: dict, user_message: str) -> str:
         user_message=user_message,
     )
     fallback = "您好！請問有什麼需要協助的嗎？例如影片播放、退款、帳號相關的問題我都可以幫忙。"
-    return call_fast(prompt, max_tokens=120, temperature=0.5, fallback=fallback)
+    return call_writer(prompt, max_tokens=120, temperature=0.5, fallback=fallback)

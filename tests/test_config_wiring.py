@@ -29,11 +29,11 @@ def test_new_state_honors_threshold_override():
 def test_cs_response_persona_default_then_override(monkeypatch):
     captured = {}
 
-    def fake_call_reasoning(prompt, **kw):
+    def fake_call_writer(prompt, **kw):
         captured["system"] = kw.get("system")
         return "ok"
 
-    monkeypatch.setattr(cs_response, "call_reasoning", fake_call_reasoning)
+    monkeypatch.setattr(cs_response, "call_writer", fake_call_writer)
     st = state_mod.new_state()
 
     # 沒注入 ＝ 檔案預設人設
