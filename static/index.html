@@ -408,13 +408,13 @@ let showRaw = false;
 const LEGEND = [
   { type: "greeting",          color: "#38bdf8", label: "問候 (greeting)",          desc: "純打招呼（你好、Hi、在嗎）；turn_count 不增加。一個 session 累計 max_greeting_count 次後永久轉灰框。" },
   { type: "greeting_blocked",  color: "#9ca3af", label: "問候已達上限 (greeting_blocked)", desc: "greeting 累計超過 max（預設 3 次）後的硬擋訊息，不再呼叫 LLM。" },
-  { type: "clarification",     color: "#eab308", label: "釐清 (clarification)",      desc: "用戶訊息模糊（亂碼、太籠統、無法判斷想問什麼），系統請用戶補充。連續 3 次強制建單。" },
-  { type: "off_topic",         color: "#ea580c", label: "離題 (off_topic)",         desc: "用戶問題不在 HiSKIO 業務範圍（食物、天氣、推薦商品等）。off_topic_count 會累加。" },
+  { type: "clarification",     color: "#eab308", label: "釐清 (clarification)",      desc: "用戶訊息模糊（亂碼、太籠統、無法判斷想問什麼），系統請用戶補充。連續 3 次強制提議轉真人。" },
+  { type: "off_topic",         color: "#ea580c", label: "離題 (off_topic)",         desc: "用戶問題不在 HiSKIO 業務範圍（食物、天氣、推薦商品等）。固定話術、不呼叫模型；off_topic_count 會累加。" },
   { type: "off_topic_blocked", color: "#9ca3af", label: "離題已達上限 (off_topic_blocked)", desc: "離題累計達上限後的硬擋訊息。" },
-  { type: "intent_selection",  color: "#4c1d95", label: "多重意圖選項 (intent_selection)", desc: "偵測到多個獨立問題，列選項請用戶選一個先處理。" },
-  { type: "faq",               color: "#16a34a", label: "FAQ 標準答案 (faq)",        desc: "命中 FAQ，AI 用核心步驟一字不漏照抄、潤飾開場結尾。" },
-  { type: "rag",               color: "#2563eb", label: "知識庫解答 (rag)",         desc: "FAQ 未命中、KB 有相關文章，由 Sonnet 根據 KB 內容生成回答。" },
-  { type: "no_kb_match",       color: "#ec4899", label: "知識庫無解 (no_kb_match)", desc: "KB 完全沒有相關文章，AI 誠實告知並提議轉真人客服。" },
+  { type: "faq",               color: "#16a34a", label: "FAQ 標準答案 (faq)",        desc: "分診腦命中 FAQ，答案本體由程式一字不漏照貼、寫手只加開場結尾（FAQ 不會幻覺的保護機制）。" },
+  { type: "rag",               color: "#2563eb", label: "知識庫解答 (rag)",         desc: "分診腦從索引卡挑出 1-3 篇 KB 文章（檢索）→ 程式抓全文 → 寫手照全文改寫（生成）。文章沒提的內容禁止自行補充。" },
+  { type: "acknowledge",       color: "#10b981", label: "確認語回應 (acknowledge)",  desc: "用戶說「謝謝／我知道了／OK／好吧」等。只有明確正面表態（user_satisfied=true）才把問題標為已解決；「好吧」等消極接受不結案。" },
+  { type: "daily_limit",       color: "#9ca3af", label: "每日配額已滿 (daily_limit)", desc: "同一會員當日訊息超過上限（預設 30 句，後台可調）：固定話術＋提議轉真人，不再呼叫模型（防洗版燒錢）。" },
   { type: "handoff_offer",     color: "#7c3aed", label: "提議轉真人 (handoff_offer)", desc: "AI 判斷需要真人，詢問「要幫您轉真人嗎？」等用戶回「好／不用」。" },
   { type: "force_escalation",  color: "#7c3aed", label: "強制提議轉真人 (force_escalation)", desc: "連續 3 次模糊／無法溝通，系統主動提議轉真人。" },
   { type: "handoff",           color: "#0891b2", label: "已轉真人 (handoff)",        desc: "用戶同意轉真人：講一句安撫話、發出交接訊號給 HiSupport，HiBot 退場。" },
@@ -427,7 +427,7 @@ const STATE_FIELD_DOC = {
   session_id:    "對話 session 唯一 ID（UUID）",
   created_at:    "session 建立時間（UTC ISO 8601）",
   updated_at:    "最後更新時間",
-  phase:         "對話階段：對話中／等待用戶選擇意圖／等待轉真人確認",
+  phase:         "對話階段：對話中／等待轉真人確認（v8 起僅此兩值）",
   turn_count:    "對話輪數（greeting 不計）",
 
   // user_info
@@ -437,41 +437,35 @@ const STATE_FIELD_DOC = {
   user_name:     "顯示用名稱",
   purchase_history: "已購課程清單（mock 資料）",
 
-  // issue_context
-  category:      "AI 評估後的問題分類（技術問題／帳務退款／帳號登入／課程內容／課程操作／其他）",
-  sub_category:  "更細的子分類，如「無法觀看影片」",
-  summary:       "AI 生成的問題一句話摘要",
-  user_emotion:  "用戶情緒：中性／困惑／焦慮／不滿／憤怒",
+  // issue_context（v8：由分診腦每輪順手輸出，與決策同源；供真人交接摘要用）
+  category:      "分診腦評估的問題分類（退款／發票／登入／影片／購買／課程內容／其他）",
+  summary:       "分診腦生成的問題一句話摘要",
+  user_emotion:  "用戶情緒：中性／焦急／不滿／友善",
 
   // faq_context
   matched_faq_id:    "命中的 FAQ ID（如 faq_001）",
-  match_confidence:  "命中信心度 0.0-1.0；≥0.7 才會走 FAQ",
-  answer_strategy:   "本輪採用的回答策略：faq_template／rag／no_kb_match",
+  answer_strategy:   "本輪採用的回答策略：faq_template／rag",
 
   // kb_context
-  indexed_articles:        "manager 挑選的 KB 文章 ID 清單",
-  articles_used_in_response: "實際塞進 cs_response prompt 的文章",
+  articles_used_in_response: "實際塞進寫手 prompt 的文章（分診腦挑的編號）",
 
-  // service_limits（2026-07-04 清理：只剩離題會觸發動作；低信心/未解決僅為主管軟參考計數）
+  // service_limits
   max_off_topic_count:      "離題容忍上限（預設 3；達上限 → 擋下 off_topic_blocked）",
   off_topic_count:          "已累計離題次數",
-  low_confidence_count:     "已累計 AI 低信心回答次數（僅供主管參考，不觸發動作）",
-  unresolved_count:         "已累計用戶不滿意次數（僅供主管參考，不觸發動作）",
+  daily_date:               "每日配額歸屬日（跨日自動歸零）",
+  daily_count:              "當日已處理訊息數（達上限 → daily_limit 擋下，防洗版燒錢）",
 
   // ticket_state（轉真人交接狀態）
   ticket_suggested:    "AI 是否已提議轉真人（等待用戶確認）",
   user_decision:       "用戶對轉真人的回應：accepted／declined／null",
   handed_off:          "是否已交接真人（True＝回應帶 handoff.requested、之後閉環）",
-  handoff_reason:      "轉真人原因：no_kb_match／unclear_limit／needs_human／user_request",
+  handoff_reason:      "轉真人原因：no_kb_match／unclear_limit／needs_human／user_request／daily_limit",
 
   // intent_state
-  input_classification:      "本輪 manager 選的 action（greeting/clarify/answer_with_faq/...）",
-  consecutive_unclear_count: "連續模糊計數（達 max 強制建單）",
-  max_unclear_count:         "模糊容忍上限（預設 2，第 3 次強制建單）",
+  consecutive_unclear_count: "連續模糊計數（達 max 強制提議轉真人）",
+  max_unclear_count:         "模糊容忍上限（預設 2，第 3 次強制提議轉真人）",
   greeting_count:            "session 累計 greeting 次數",
   max_greeting_count:        "greeting 上限（超過轉灰框，預設 3）",
-  intent_clarity:            "本輪意圖明確度：simple／ambiguous_subordinate／parallel_multiple",
-  awaiting_selection:        "是否在等用戶從多重意圖選一個",
   current_intent:            "目前正在跟用戶討論的意圖文字",
   intent_log:                "整個 session 偵測到的所有意圖（永不刪除，只更新 status）",
 
@@ -481,13 +475,6 @@ const STATE_FIELD_DOC = {
   in_scope:    "是否屬於 HiSKIO 業務範圍",
   role:        "意圖角色：primary（主訴）／secondary（順便問）／context（純脈絡不算待辦）",
   first_turn:  "首次出現在第幾輪",
-
-  // escalation_signals
-  user_explicitly_requested_human: "用戶是否明確要求人工",
-  ai_low_confidence_count:         "AI 低信心累計次數",
-  issue_complexity_high:           "問題是否被判定為複雜",
-  user_anger_threshold_hit:        "用戶情緒是否達憤怒閾值",
-  no_kb_match:                     "KB 完全沒命中（觸發 no_kb_handler）",
 
   chat_history: "完整對話訊息陣列（含 timestamp 與 response_type）",
 };
