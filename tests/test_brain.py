@@ -108,3 +108,24 @@ def test_user_satisfied_defaults_false(kb_env, monkeypatch):
     _fake_triage(monkeypatch, {"recommended_action": "acknowledge_confirmation"})
     out = brain.decide(_state(), "好吧")
     assert out["user_satisfied"] is False
+
+
+def test_handoff_reason_passes_whitelist(kb_env, monkeypatch):
+    """轉真人精確原因(Adam 2026-07-06 拍板):no_kb_match 要能一路帶到交接摘要。"""
+    _fake_triage(monkeypatch, {
+        "recommended_action": "suggest_ticket",
+        "reason_to_user": "這部分知識庫沒有資料",
+        "handoff_reason": "no_kb_match",
+    })
+    out = brain.decide(_state(), "有 Java 代報名服務嗎")
+    assert out["handoff_reason"] == "no_kb_match"
+
+
+def test_handoff_reason_bad_value_defaults_needs_human(kb_env, monkeypatch):
+    """白名單外的原因值 → 回預設 needs_human(不讓怪值流進交接摘要)。"""
+    _fake_triage(monkeypatch, {
+        "recommended_action": "suggest_ticket",
+        "handoff_reason": "aliens",
+    })
+    out = brain.decide(_state(), "hi")
+    assert out["handoff_reason"] == "needs_human"

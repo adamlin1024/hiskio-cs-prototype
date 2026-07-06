@@ -16,35 +16,35 @@ logger = logging.getLogger(__name__)
 _PROMPT = load_prompt("acknowledge_handler")
 
 
-def _format_intent_log(intent_log: list[dict]) -> str:
-    if not intent_log:
-        return "（無）"
-    lines = []
-    for i, item in enumerate(intent_log):
-        role = item.get("role", "primary")
-        in_scope = item.get("in_scope", True)
-        lines.append(
-            f"  [{i}] {item['text']}"
-            f"（status={item['status']}, role={role}, in_scope={in_scope}, "
-            f"first_turn={item.get('first_turn', '?')}）"
-        )
-    return "\n".join(lines)
+def _next_pending(intent_log: list[dict], current: str | None) -> str | None:
+    """下一個待辦=最早出現、status=pending、且不是當前主題的意圖。
+
+    由程式判定、不交給模型掃清單——實測小模型會把已解決的又端出來(2026-07-06)。
+    """
+    candidates = [
+        i for i in intent_log
+        if i.get("status") == "pending" and i.get("text") != current
+    ]
+    if not candidates:
+        return None
+    return min(candidates, key=lambda i: i.get("first_turn", 0))["text"]
 
 
 def respond(state: dict, user_message: str) -> str:
     """生成 acknowledge 回應。
 
-    讀 intent_log + current_intent，由 Haiku 產出帶推進語的禮貌回應。
+    「要不要推進、推進到哪一題」由程式算好(_next_pending),模型只負責措辭。
     失敗時 fallback 為通用回應，避免卡住主流程。
     """
     intent_state = state.get("intent_state", {})
     current = intent_state.get("current_intent") or "（無）"
     intent_log = intent_state.get("intent_log", [])
+    nxt = _next_pending(intent_log, intent_state.get("current_intent"))
 
     prompt = _PROMPT.format(
         user_message=user_message,
         current_intent=current,
-        intent_log_str=_format_intent_log(intent_log),
+        next_pending=nxt or "（無）",
     )
 
     fallback = "不客氣！還有其他需要協助的地方嗎？"

@@ -35,6 +35,9 @@ VALID_ACTIONS = {
     "continue_intent",
 }
 _VALID_ROLES = {"primary", "secondary", "context"}
+# 轉真人精確原因白名單(交接資料要完整,Adam 2026-07-06 拍板):
+# no_kb_match=知識庫沒資料(=該補 KB 的訊號)/needs_human=查個資、點名要真人等
+_VALID_HANDOFF_REASONS = {"no_kb_match", "needs_human"}
 
 FALLBACK_CLARIFY_MSG = "抱歉，我不太確定您想問的內容，能否再多描述一下您遇到的狀況？"
 
@@ -96,6 +99,7 @@ def _fallback_decision(reason: str) -> dict:
         "kb_article_ids": [],
         "clarify_message": FALLBACK_CLARIFY_MSG,
         "reason_to_user": None,
+        "handoff_reason": "needs_human",
         "user_satisfied": False,
         "issue": {},
         "new_intents_to_log": [],
@@ -204,12 +208,17 @@ def decide(state: dict, user_message: str) -> dict:
     if not isinstance(issue, dict):
         issue = {}
 
+    handoff_reason = parsed.get("handoff_reason")
+    if handoff_reason not in _VALID_HANDOFF_REASONS:
+        handoff_reason = "needs_human"
+
     return {
         "recommended_action": action,
         "faq_id": faq_id,
         "kb_article_ids": kb_ids,
         "clarify_message": parsed.get("clarify_message"),
         "reason_to_user": parsed.get("reason_to_user"),
+        "handoff_reason": handoff_reason,
         "user_satisfied": bool(parsed.get("user_satisfied", False)),
         "issue": {
             "category": str(issue.get("category") or "").strip() or None,

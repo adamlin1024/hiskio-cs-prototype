@@ -390,7 +390,8 @@ def _execute_suggest_ticket(state, user_message, decision, session_id) -> dict:
     reason = decision.get("reason_to_user") or "這個問題交給真人客服會比較快"
     ai_response = f"{reason}\n要幫您轉真人嗎？（回覆「好」或「不用」）"
     state["ticket_state"]["ticket_suggested"] = True
-    state["ticket_state"]["handoff_reason"] = "needs_human"
+    # 精確原因(交接資料要完整):no_kb_match=真人會看到「知識庫沒有對應資料」=該補 KB 的訊號
+    state["ticket_state"]["handoff_reason"] = decision.get("handoff_reason") or "needs_human"
     state["phase"] = "等待轉真人確認"
     return _finalize_turn(
         state, user_message, ai_response, "handoff_offer",

@@ -172,6 +172,50 @@ def test_out_of_scope_blocked_after_limit(db, monkeypatch):
     assert res["ai_response"] == orchestrator.OFF_TOPIC_BLOCKED_MSG
 
 
+# ── 引導下一題:由程式判定,不交給模型掃清單(2026-07-06 實測修正)────
+
+
+def test_next_pending_picks_earliest_pending_only():
+    log = [
+        {"text": "退費", "status": "confirmed_resolved", "first_turn": 0},
+        {"text": "發票", "status": "pending", "first_turn": 2},
+        {"text": "抵用券", "status": "pending", "first_turn": 1},
+    ]
+    assert acknowledge_handler._next_pending(log, "退費") == "抵用券"  # 最早的 pending
+
+
+def test_next_pending_none_when_all_resolved():
+    """全部解決 → 無待辦(模型不得再把已解決的端出來——由程式保證)。"""
+    log = [
+        {"text": "退費", "status": "confirmed_resolved", "first_turn": 0},
+        {"text": "發票", "status": "answered", "first_turn": 1},
+    ]
+    assert acknowledge_handler._next_pending(log, "發票") is None
+
+
+# ── 轉真人精確原因(Adam 拍板:交接資料要最完整)────────────────────
+
+
+def test_suggest_ticket_uses_brain_handoff_reason(db, monkeypatch):
+    """腦標 no_kb_match → 交接原因照標(真人看到「知識庫沒有對應資料」=補 KB 訊號)。"""
+    monkeypatch.setattr(brain, "decide", lambda st, msg: _canned_decision(
+        "suggest_ticket", reason_to_user="這部分沒有資料", handoff_reason="no_kb_match"))
+    s = _fresh_state()
+    res = orchestrator.handle_user_message(s["session_id"], "有 Java 代報名嗎")
+    assert res["response_type"] == "handoff_offer"
+    reloaded = state_mod.load_state(s["session_id"])
+    assert reloaded["ticket_state"]["handoff_reason"] == "no_kb_match"
+
+
+def test_suggest_ticket_defaults_needs_human(db, monkeypatch):
+    monkeypatch.setattr(brain, "decide", lambda st, msg: _canned_decision(
+        "suggest_ticket", reason_to_user="要查訂單"))
+    s = _fresh_state()
+    orchestrator.handle_user_message(s["session_id"], "查我的訂單")
+    reloaded = state_mod.load_state(s["session_id"])
+    assert reloaded["ticket_state"]["handoff_reason"] == "needs_human"
+
+
 # ── 決定單 issue → 交接摘要原料(同源)──────────────────────────────
 
 
