@@ -227,7 +227,13 @@ FAQ 路徑天然免疫(core_steps 程式貼上,模型不得改寫)。
 
 **§9 修訂(live 抓到的漏洞根治)**:後台人設注入原語意=整份覆寫 cs_response_system → 一行簡短人設會洗掉防捏造鐵則。改為:**注入只覆寫「人設段」;守則(`prompts/cs_response_guard.txt`:防捏造+任務+SUGGEST_TICKET 規則)永遠附加、不可被蓋**。注入鍵名不變,HiSupport 端無感。
 
-**遺留(不擋結案)**:Q20 類 B2B 判斷抖動(可日後在腦規則補一條「企業合作→轉真人」);正式機部署檢查表(HIBOT_API_KEY 必設/HIBOT_TIMEOUT=30/OpenRouter 額度上限調整)在 §14。
+**遺留(不擋結案)**:正式機部署檢查表(HIBOT_API_KEY 必設/HIBOT_TIMEOUT=30/OpenRouter 額度上限調整)在 §14;考卷臨界題(如單詞課名「vibe coding」判離題 vs 請澄清)存在 run-to-run 抖動,97% 水位穩定。
+
+**2026-07-06 補強(Adam 拍板後追加)**:
+- **多重意圖定案=直接答**(不列選單):答用戶指定優先的、其餘記 intent_log;感謝→結案+引導下一個待辦;「引導哪一題」由程式 `_next_pending` 判定(最早的 pending),模型只管措辭——實測小模型會把已解決的又端出來+捏造「已更正完成」,故收回其判斷權。多輪實測 3 劇本全過(`scripts/run_multiintent_test.py`)。
+- **轉真人精確原因**:決定單新增 `handoff_reason`(白名單 no_kb_match/needs_human);「知識庫沒有對應資料」現在會寫進真人交接摘要=補 KB 的訊號。
+- **離題 vs 沒資料邊界寫死**:「詢問 HiSKIO 有沒有某課程/服務/方案」=業務相關詢問,資料庫沒有→轉真人(no_kb_match),不算離題(Q20 因此轉正)。
+- 測試 99 全綠;考卷回歸 29/30(97%)紅線零失誤。
 
 ## 變更紀錄
 
