@@ -227,7 +227,9 @@ FAQ 路徑天然免疫(core_steps 程式貼上,模型不得改寫)。
 
 **§9 修訂(live 抓到的漏洞根治)**:後台人設注入原語意=整份覆寫 cs_response_system → 一行簡短人設會洗掉防捏造鐵則。改為:**注入只覆寫「人設段」;守則(`prompts/cs_response_guard.txt`:防捏造+任務+SUGGEST_TICKET 規則)永遠附加、不可被蓋**。注入鍵名不變,HiSupport 端無感。
 
-**遺留(不擋結案)**:正式機部署檢查表(HIBOT_API_KEY 必設/HIBOT_TIMEOUT=30/OpenRouter 額度上限調整)在 §14;考卷臨界題(如單詞課名「vibe coding」判離題 vs 請澄清)存在 run-to-run 抖動,97% 水位穩定。
+**部署(2026-07-06)**:已上 Railway https://hichatbot.up.railway.app(GitHub main 自動部署;kb_index.json 入庫、開機不重建索引;OPENROUTER_API_KEY/RUNTIME_CONFIG_PATH=/data 已設;雲端實測 KB 問答 9s 正確)。**未完成:App Sleeping 需後台手關;HIBOT_API_KEY 未設(測試期便利,接 HiSupport 前必設)**。
+
+**遺留(不擋結案)**:正式機部署檢查表其餘項(HIBOT_TIMEOUT=30/OpenRouter 額度上限調整)在 §14;考卷臨界題(如單詞課名「vibe coding」判離題 vs 請澄清)存在 run-to-run 抖動,97% 水位穩定。
 
 **2026-07-06 補強(Adam 拍板後追加)**:
 - **多重意圖定案=直接答**(不列選單):答用戶指定優先的、其餘記 intent_log;感謝→結案+引導下一個待辦;「引導哪一題」由程式 `_next_pending` 判定(最早的 pending),模型只管措辭——實測小模型會把已解決的又端出來+捏造「已更正完成」,故收回其判斷權。多輪實測 3 劇本全過(`scripts/run_multiintent_test.py`)。
