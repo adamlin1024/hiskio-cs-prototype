@@ -4,7 +4,6 @@ __pycache__/
 .venv/
 venv/
 data/prototype.db
-data/kb_index.json
 data/runtime_config.json
 data/conversations.json
 .pytest_cache/
