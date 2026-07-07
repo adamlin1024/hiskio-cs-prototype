@@ -31,6 +31,8 @@ Python 3.11 + FastAPI + SQLite + **模型無關 LLM 層**（可插拔：直連 A
 用 `/kb-review` skill 啟動完整流程（KB / FAQ / 最近問答審視，互動式更新）。
 使用者只需丟資料 + 確認統籌文件，其他全自動。
 
+**遠端知識來源（#7，2026-07-08 起）**：設 `HISUPPORT_KB_URL`（＋`HISUPPORT_KB_KEY`）後，KB 另從 HiSupport 說明中心「啟用中」文章合併進來（`core/kb_remote.py`，`hs_` 前綴、落地 `data/kb_remote*`）；未設＝純本地、行為不變。更新全靠事件（開機對齊＋HiSupport 門鈴 `POST /api/kb/refresh`），**禁止加定時輪詢**（Adam 拍板）。
+
 ### 重要約束
 - KB 兩層分離：`data/kb_source/`（原稿）與 `data/kb/`（系統檔）
 - FAQ 兩層分離：`data/faq_source/`（原稿）與 `data/faq.json`（系統檔）

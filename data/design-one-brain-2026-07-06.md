@@ -241,3 +241,9 @@ FAQ 路徑天然免疫(core_steps 程式貼上,模型不得改寫)。
 
 - 2026-07-06 初版(Claude 起草,基於 07-05~06 全部實測)。
 - 2026-07-06 補:§4.1 轉真人三層總表、user_satisfied(「好吧」誤結案)、分診模型改 V4-Pro 關思考(追加考 26/26)、§14 二次檢視 11 條補強(多輪考題/幻覺編號驗證/思考偵測警報/逾時線/每日配額/金鑰部署/財務保險絲)。**Adam 核准動工;無舊對話相容需求。**
+- 2026-07-08 **遠端知識來源(#7 知識庫改讀 HiSupport 說明中心)落地**(tests/ 107 綠;Adam 拍板「零輪詢」):
+  - 新增 `core/kb_remote.py`:向 HiSupport `GET /api/hibot/knowledge`(Bearer `HISUPPORT_KB_KEY`,未設退用 `HIBOT_API_KEY`;兩把分開=本機可「HiBot 不鎖、拉知識有鑰」)拉「啟用中」文章 → 落地 `data/kb_remote_index.json`+`data/kb_remote/hs_<id>.md`(與本地 KB 兩層分離)→ 以 `active_ids` 剪枝停用/刪除篇 → 清快取(kb_indexer+brain.reset_caches,分診腦立刻看到新知識)。索引卡 summary/key_questions=寫手 LLM 生成(只為有變動的跑),失敗退化「內文前 60 字+標題」不擋同步;HiSupport 失聯=沿用最後快取。
+  - `nodes/kb_indexer.py`:索引=本地+遠端合併(`hs_` 前綴走 kb_remote 目錄);**HISUPPORT_KB_URL 未設=純本地、行為與現況完全相同**(feature flag,雲端未設定即零影響)。
+  - 觸發=**事件驅動、無定時輪詢**:①開機對齊一次(背景)②HiSupport 門鈴 `POST /api/kb/refresh`(文章存檔/開關切換自動打+後台「立即同步知識」按鈕)。
+  - `requirements.txt` 明鎖 `starlette>=0.37.2,<0.39`(fastapi 0.115 相容範圍;本機實踩 starlette 1.0 開機爆)。
+  - FAQ(faq.json)本輪不動;長期方向=知識單一來源收斂到說明中心文章(標準答案=短文章),自動審視(#20)另案。

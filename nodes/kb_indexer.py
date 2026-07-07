@@ -17,16 +17,26 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=1)
 def _load_kb_index() -> list[dict]:
+    """本地索引＋遠端(HiSupport 說明中心,#7)索引合併;遠端停用時=純本地(現行行為)。"""
     path = Path(os.getenv("KB_INDEX_PATH", "data/kb_index.json"))
-    if not path.exists():
+    local: list[dict] = []
+    if path.exists():
+        local = json.loads(path.read_text(encoding="utf-8"))
+    else:
         logger.warning("kb_index.json 不存在。請先跑 tools/_hibot_build_indexes.py")
-        return []
-    return json.loads(path.read_text(encoding="utf-8"))
+
+    from core import kb_remote
+
+    return local + kb_remote.load_remote_index()
 
 
 def load_kb_article(article_id: str) -> dict | None:
-    """讀取 data/kb/{article_id}.md 並解析 front matter + 內文。"""
-    kb_dir = Path(os.getenv("KB_DIR", "data/kb"))
+    """讀取文章全文並解析 front matter + 內文。hs_ 前綴=遠端文章(data/kb_remote/),其餘=本地 data/kb/。"""
+    from core import kb_remote
+
+    dir_env = ("KB_REMOTE_DIR", "data/kb_remote") \
+        if article_id.startswith(kb_remote.REMOTE_PREFIX) else ("KB_DIR", "data/kb")
+    kb_dir = Path(os.getenv(*dir_env))
     path = kb_dir / f"{article_id}.md"
     if not path.exists():
         logger.warning("KB 文章不存在：%s", path)

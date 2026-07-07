@@ -1,4 +1,7 @@
 fastapi==0.115.0
+# 明鎖 starlette:fastapi 0.115 需要 <0.39;不鎖的話新環境會裝到 1.x,服務開機直接爆
+# (2026-07-08 本機實踩:starlette 被升到 1.0.0 → Router.__init__ on_startup 不存在)
+starlette>=0.37.2,<0.39
 uvicorn[standard]==0.32.0
 anthropic>=0.40.0
 openai>=1.40.0

@@ -92,6 +92,14 @@ def _startup() -> None:
     else:
         logger.info("API 金鑰檢查通過：所有等級用到的 provider 金鑰都已設定")
 
+    # 遠端知識來源(#7):設了 HISUPPORT_KB_URL 才啟用;開機對齊一次(背景跑,不擋啟動、失敗沿用最後快取)。
+    # 之後的更新全靠 HiSupport 門鈴(POST /api/kb/refresh)——**沒有定時輪詢**(Adam 2026-07-08 拍板)。
+    from core import kb_remote
+    if kb_remote.enabled():
+        import threading
+        threading.Thread(target=kb_remote.sync, name="kb-remote-boot-sync", daemon=True).start()
+        logger.info("遠端知識來源已啟用:%s(開機對齊已排入背景)", os.getenv("HISUPPORT_KB_URL"))
+
 
 class NewSessionReq(BaseModel):
     is_logged_in: bool = False
@@ -219,6 +227,22 @@ def set_config(req: ConfigReq):
         },
         merge=True,
     )
+
+
+@app.post("/api/kb/refresh")
+def kb_refresh():
+    """HiSupport 門鈴(#7):說明中心文章有異動時打這裡 → 立即增量同步遠端知識。
+
+    也是後台「立即同步知識」按鈕的落點。零輪詢設計:更新只由本門鈴+開機對齊觸發。
+    金鑰把關走全域中介層(設 HIBOT_API_KEY 後 /api/* 一律要 Bearer)。
+    """
+    from core import kb_remote
+    if not kb_remote.enabled():
+        raise HTTPException(status_code=409, detail="遠端知識來源未啟用(未設 HISUPPORT_KB_URL)")
+    stats = kb_remote.sync()
+    if stats.get("error"):
+        raise HTTPException(status_code=502, detail=f"同步失敗(沿用最後快取):{stats['error']}")
+    return stats
 
 
 @app.get("/health")
