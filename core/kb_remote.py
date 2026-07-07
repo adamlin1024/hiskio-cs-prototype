@@ -113,12 +113,16 @@ def sync(full: bool = False) -> dict:
             body = (art.get("body_text") or "").strip()
             title = (art.get("title") or "").strip()
             category = (art.get("category") or "").strip()
-            _write_article_md(kb_dir / f"{rid}.md", rid, title, category, art.get("url"), body)
+            _write_article_md(
+                kb_dir / f"{rid}.md", rid, title, category, art.get("url"), body,
+                verbatim=bool(art.get("verbatim")),
+            )
             index[rid] = {
                 "id": rid,
                 "title": title,
                 "category": category,
                 "url": art.get("url"),
+                "verbatim": bool(art.get("verbatim")),  # #18 照答:跳過寫手,一字不改用內文
                 "updated_at": art.get("updated_at"),
                 **_index_card(title, category, body),
             }
@@ -182,10 +186,15 @@ def _llm_index_card(title: str, category: str, body: str) -> dict:
     return json.loads(match.group(0))
 
 
-def _write_article_md(path: Path, rid: str, title: str, category: str, url: str | None, body: str) -> None:
+def _write_article_md(
+    path: Path, rid: str, title: str, category: str, url: str | None, body: str,
+    verbatim: bool = False,
+) -> None:
     fm = [f"id: {rid}", f"title: {title}", f"category: {category}"]
     if url:
         fm.append(f"url: {url}")
+    if verbatim:
+        fm.append("verbatim: true")  # #18 照答旗標(front matter 解析後為字串 "true")
     path.write_text("---\n" + "\n".join(fm) + "\n---\n" + body + "\n", encoding="utf-8")
 
 

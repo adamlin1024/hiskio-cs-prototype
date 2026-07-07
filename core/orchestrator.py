@@ -319,9 +319,22 @@ def _execute_answer_with_kb(state, user_message, decision, session_id) -> dict:
         logger.warning("kb 文章讀取全數失敗 ids=%r,降級提議轉真人", decision.get("kb_article_ids"))
         return _execute_suggest_ticket(state, user_message, decision, session_id)
 
-    ai_response = cs_response.respond(state, articles, user_message)
+    # #18 照答:首選文章標了 verbatim(標準答案)→ 跳過寫手,一字不改用內文——不被 AI 潤飾走味,也零 LLM 花費。
+    # (md front matter 解析出來是字串 "true";遠端索引卡是布林,兩種都認)
+    top_verbatim = articles[0].get("verbatim") is True or str(articles[0].get("verbatim", "")).lower() == "true"
+    if top_verbatim:
+        articles = articles[:1]  # 照答=只用這一篇(來源標註也只列它)
+        ai_response = str(articles[0].get("content", "")).strip()
+    else:
+        ai_response = cs_response.respond(state, articles, user_message)
     state["kb_context"]["articles_used_in_response"] = [a["id"] for a in articles]
     state["faq_context"]["answer_strategy"] = "rag"
+
+    # #18 參考來源:回答用到的文章(只列有公開網址的;隱藏文章沒有 url,天生不外洩)
+    sources = [
+        {"title": a.get("title") or "", "url": a["url"]}
+        for a in articles if a.get("url")
+    ]
 
     if ai_response.startswith("[SUGGEST_TICKET]"):
         # 寫手舉手:已答多次仍不滿/金流個案等(寫手指令的嚴格條件)
@@ -337,6 +350,7 @@ def _execute_answer_with_kb(state, user_message, decision, session_id) -> dict:
     return _finalize_turn(
         state, user_message, ai_response, "rag",
         increment_turn=True, session_id=session_id, mark_answered=True,
+        sources=sources,
     )
 
 
@@ -459,6 +473,7 @@ def _finalize_turn(
     increment_turn: bool,
     session_id: str,
     mark_answered: bool = False,
+    sources: list[dict] | None = None,
 ) -> dict:
     """共用收尾：append、意圖推進、turn_count、save。"""
     append_message(state, "assistant", ai_response, response_type=response_type)
@@ -472,10 +487,12 @@ def _finalize_turn(
 
     save_state(state)
 
-    return _build_response(state, ai_response, response_type)
+    return _build_response(state, ai_response, response_type, sources=sources)
 
 
-def _build_response(state: dict, ai_response: str, response_type: str) -> dict:
+def _build_response(
+    state: dict, ai_response: str, response_type: str, sources: list[dict] | None = None,
+) -> dict:
     return {
         "ai_response": ai_response,
         "response_type": response_type,
@@ -484,6 +501,8 @@ def _build_response(state: dict, ai_response: str, response_type: str) -> dict:
         "ticket_id": None,
         # 轉真人交接訊號（給 HiSupport 讀）
         "handoff": build_handoff(state),
+        # #18 參考來源(回答用到且有公開網址的文章;HiSupport 依後台開關決定要不要附給訪客)
+        "sources": sources or [],
         "state": state,
     }
 
