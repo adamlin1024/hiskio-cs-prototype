@@ -98,3 +98,35 @@ def test_article_without_url_yields_no_source(kb_env, monkeypatch):
 def test_non_kb_paths_return_empty_sources(kb_env):
     res = orchestrator._build_response(new_state(), "您好!", "greeting")
     assert res["sources"] == []
+
+
+# ===== 審查後補洞(2026-07-08) =====
+
+def test_verbatim_honored_even_when_not_first_pick(kb_env, monkeypatch):
+    """審查發現(中):分診腦不保證最相關排第一;標準答案排第二也要照答,不可送寫手改寫。"""
+    monkeypatch.setattr(
+        orchestrator.cs_response, "respond",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("有 verbatim 篇時不該呼叫寫手")),
+    )
+    # kb_norm(非照答) 排第一、kb_std(照答) 排第二
+    res = orchestrator._execute_answer_with_kb(
+        new_state(), "組合包能退嗎", _decision(["kb_norm", "kb_std"]), session_id="t1")
+
+    assert res["ai_response"] == "可以，組合包 7 天內未觀看可退費。"  # 照答那篇
+    assert [s["url"] for s in res["sources"]] == ["http://hs.test/zh-tw/article/xyz"]
+
+
+def test_empty_verbatim_content_falls_back_to_writer(kb_env, monkeypatch, tmp_path):
+    """審查發現(中):照答文章內文為空 → 不回空白訊息,退回寫手正常改寫。"""
+    # 把 kb_std 內文清空(保留 verbatim front matter)
+    (tmp_path / "kb" / "kb_std.md").write_text(
+        "---\nid: kb_std\ntitle: 空的照答\ncategory: 購課\n"
+        "url: http://hs.test/zh-tw/article/xyz\nverbatim: true\n---\n\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(orchestrator.cs_response, "respond", lambda *a, **k: "寫手補的回答。")
+
+    res = orchestrator._execute_answer_with_kb(
+        new_state(), "組合包能退嗎", _decision(["kb_std"]), session_id="t1")
+
+    assert res["ai_response"] == "寫手補的回答。"  # 沒回空白

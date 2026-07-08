@@ -1,13 +1,16 @@
 """HiSupport 說明中心遠端知識來源(#7 知識庫改讀說明中心)。
 
 **HISUPPORT_KB_URL 未設＝完全停用**——維持現行本地 data/kb/ 行為,已上線服務零影響(feature flag)。
-設定後:啟動先全量同步;之後靠 HiSupport 的門鈴(文章異動時打 POST /api/kb/refresh)即時增量,
-外加慢速兜底輪詢(KB_SYNC_INTERVAL_SECONDS,預設 3600)防門鈴漏接。
+設定後:啟動先全量同步;之後**純事件驅動**(HiSupport 文章異動時打門鈴 POST /api/kb/refresh)增量,
+無定時輪詢(Adam 拍板;見 CLAUDE.md「遠端知識來源」)。
 
 資料落地(與本地 KB 兩層分離,不互相污染):
-- KB_REMOTE_INDEX_PATH(data/kb_remote_index.json):遠端文章索引卡(id/title/category/summary/key_questions/url)
-- KB_REMOTE_DIR(data/kb_remote/)/hs_<id>.md:全文(front matter+內文,格式同本地 KB)
-- KB_REMOTE_STATE_PATH(data/kb_remote_state.json):增量游標(=上次回應的 generated_at,用伺服器時間避免時鐘偏差)
+- KB_REMOTE_INDEX_PATH(data/kb_remote_index.json):遠端文章「權威中繼資料」——id/title/category/url/verbatim
+  ＋索引卡 summary/key_questions。json.dumps 寫入,絕不會被標題內的字元(例 '---')弄壞。
+- KB_REMOTE_DIR(data/kb_remote/)/hs_<id>.md:**只放內文本體**(不寫 front matter)——
+  中繼資料一律以上面的 JSON 索引為準,徹底避開「標題含 '---' 讓 front matter 解析錯位」的坑。
+- KB_REMOTE_STATE_PATH(data/kb_remote_state.json):增量游標(=上次回應 generated_at 往回退安全邊界,
+  避免「查詢完成→產 generated_at」空檔或同秒編輯永久漏抓;重抓已同步文章是冪等的、只多重建索引卡)。
 
 索引卡 summary/key_questions 由寫手 LLM 生成(同 build_kb_index 流程);LLM 失敗退化為
 「內文前 60 字+標題」,同步不中斷。HiSupport 失聯 → 保留最後一次成功資料(fallback)。
@@ -102,21 +105,25 @@ def sync(full: bool = False) -> dict:
             return {"error": str(exc)}
 
         articles = feed.get("articles") or []
-        active = {f"{REMOTE_PREFIX}{i}" for i in (feed.get("active_ids") or [])}
+        # active_ids 只收「乾淨數字 id」(防禦:對方資料異常時不讓髒 id 汙染剪枝集合)
+        active = {f"{REMOTE_PREFIX}{i}" for i in (feed.get("active_ids") or []) if _valid_id(i)}
 
         index = {e["id"]: e for e in load_remote_index()}
 
-        # 1) 更新/新增有變動的文章:寫全文檔+重建索引卡(LLM,失敗退化)
+        # 1) 更新/新增有變動的文章:寫內文檔+重建索引卡(LLM,失敗退化)。
+        #    id 必須是乾淨數字才處理——否則(對方資料異常/被冒充)可能路徑跳脫寫到別的檔;跳過並記警告。
         kb_dir.mkdir(parents=True, exist_ok=True)
+        indexed = 0
         for art in articles:
-            rid = f"{REMOTE_PREFIX}{art['id']}"
+            raw_id = art.get("id")
+            if not _valid_id(raw_id):
+                logger.warning("kb_remote 略過無效 id 的文章:%r", raw_id)
+                continue
+            rid = f"{REMOTE_PREFIX}{raw_id}"
             body = (art.get("body_text") or "").strip()
             title = (art.get("title") or "").strip()
             category = (art.get("category") or "").strip()
-            _write_article_md(
-                kb_dir / f"{rid}.md", rid, title, category, art.get("url"), body,
-                verbatim=bool(art.get("verbatim")),
-            )
+            _write_article_md(kb_dir / f"{rid}.md", body)
             index[rid] = {
                 "id": rid,
                 "title": title,
@@ -126,22 +133,34 @@ def sync(full: bool = False) -> dict:
                 "updated_at": art.get("updated_at"),
                 **_index_card(title, category, body),
             }
+            indexed += 1
 
-        # 2) 剪枝:不在 active_ids=被停用/隱藏改草稿/刪除 → 索引與全文一起移除
+        # 2) 剪枝:不在 active_ids=被停用/隱藏改草稿/刪除 → 索引與內文一起移除。
+        #    防呆:active_ids 全空但本地原本有資料、且本次也沒有任何更新 → 疑似對方查詢異常,
+        #    不執行大規模清空(避免一次刪光整庫);全量同步(full=True)才允許歸零。
         pruned = 0
-        for rid in list(index.keys()):
-            if rid not in active:
-                index.pop(rid)
-                (kb_dir / f"{rid}.md").unlink(missing_ok=True)
-                pruned += 1
+        suspicious_wipe = not active and index and not articles and not full
+        if suspicious_wipe:
+            logger.warning(
+                "kb_remote:active_ids 為空但本地有 %d 篇且本次無更新,疑似異常,跳過剪枝(可手動全量同步歸零)",
+                len(index),
+            )
+        else:
+            for rid in list(index.keys()):
+                if rid not in active:
+                    index.pop(rid)
+                    (kb_dir / f"{rid}.md").unlink(missing_ok=True)
+                    pruned += 1
 
         index_path.parent.mkdir(parents=True, exist_ok=True)
         index_path.write_text(
             json.dumps(list(index.values()), ensure_ascii=False, indent=2), encoding="utf-8")
-        _write_state(state_path, {"last_generated_at": feed.get("generated_at")})
+        # 游標往回退安全邊界(見檔頭):跳過異常剪枝時不推進游標,免得漏抓那批
+        if not suspicious_wipe:
+            _write_state(state_path, {"last_generated_at": _rewind_cursor(feed.get("generated_at"))})
 
         _bust_caches()
-        stats = {"indexed": len(articles), "pruned": pruned, "active": len(active)}
+        stats = {"indexed": indexed, "pruned": pruned, "active": len(active)}
         logger.info("kb_remote 同步完成:%s", stats)
         return stats
 
@@ -186,16 +205,35 @@ def _llm_index_card(title: str, category: str, body: str) -> dict:
     return json.loads(match.group(0))
 
 
-def _write_article_md(
-    path: Path, rid: str, title: str, category: str, url: str | None, body: str,
-    verbatim: bool = False,
-) -> None:
-    fm = [f"id: {rid}", f"title: {title}", f"category: {category}"]
-    if url:
-        fm.append(f"url: {url}")
-    if verbatim:
-        fm.append("verbatim: true")  # #18 照答旗標(front matter 解析後為字串 "true")
-    path.write_text("---\n" + "\n".join(fm) + "\n---\n" + body + "\n", encoding="utf-8")
+def _valid_id(raw) -> bool:
+    """遠端文章 id 必須是乾淨的正整數(HiSupport 自動編號)。防路徑跳脫、防髒資料。"""
+    return raw is not None and re.fullmatch(r"\d+", str(raw)) is not None
+
+
+def _rewind_cursor(generated_at: str | None, seconds: int = 5) -> str | None:
+    """把增量游標往回退幾秒:避開「查詢完成→產 generated_at」空檔與同秒編輯漏抓。
+    重抓已同步文章是冪等的(依 rid 覆寫),代價只是偶爾多重建一兩張索引卡。解析失敗＝原樣存。"""
+    if not generated_at:
+        return generated_at
+    try:
+        from datetime import datetime, timedelta
+        return (datetime.fromisoformat(generated_at) - timedelta(seconds=seconds)).isoformat()
+    except (ValueError, TypeError):
+        return generated_at
+
+
+def remote_meta(rid: str) -> dict:
+    """遠端文章的權威中繼資料(來自 JSON 索引,絕不會被標題內字元弄壞)。找不到回空 dict。"""
+    for e in load_remote_index():
+        if e.get("id") == rid:
+            return e
+    return {}
+
+
+def _write_article_md(path: Path, body: str) -> None:
+    """遠端文章只寫內文本體——不寫 front matter。中繼資料一律以 kb_remote_index.json 為權威,
+    徹底避開「標題含 '---' 讓 front matter 解析錯位、verbatim/url 遺失」的坑(#18 照答保證的守門)。"""
+    path.write_text(body + "\n", encoding="utf-8")
 
 
 def _read_state(path: Path) -> dict:

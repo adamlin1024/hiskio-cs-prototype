@@ -128,7 +128,10 @@ def test_sync_uses_incremental_cursor(remote_env, monkeypatch):
     assert "updated_since" not in calls[0]  # 首次全量
 
     kb_remote.sync()
-    assert calls[1].get("updated_since") == "2026-07-07T12:00:00+08:00"  # 之後帶游標(=上次 generated_at)
+    # 之後帶游標=上次 generated_at 往回退安全邊界(5 秒),避免查詢空檔/同秒編輯漏抓
+    from datetime import datetime
+    since = datetime.fromisoformat(calls[1]["updated_since"])
+    assert since == datetime.fromisoformat("2026-07-07T12:00:00+08:00") - __import__("datetime").timedelta(seconds=5)
 
 
 def test_llm_failure_falls_back_without_blocking(remote_env, monkeypatch):
@@ -186,3 +189,76 @@ def test_fetch_failure_keeps_last_good_data(remote_env, monkeypatch):
     assert stats.get("error")
     # 最後一次成功的資料仍在(失聯 fallback)
     assert {e["id"] for e in kb_indexer._load_kb_index()} == {"hs_12", "hs_15"}
+
+
+# ===== 審查後補洞(2026-07-08 對抗式健檢) =====
+
+def test_title_with_triple_dash_keeps_metadata(remote_env, monkeypatch):
+    """審查發現(嚴重):標題含 '---' 曾讓 front matter 解析錯位、verbatim/url 遺失。
+    改成內文檔+JSON 索引後,中繼資料不再靠 front matter,標題含任何字元都不影響。"""
+    feed = {
+        "articles": [{
+            "id": 20, "language": "zh-tw", "slug": "std1", "title": "課程退費 --- 常見問題",
+            "category": "購課", "body_text": "可以，7 天內辦理。",
+            "status": "visible", "url": "http://hs.test/zh-tw/article/std1", "verbatim": True,
+            "content_updated_at": "2026-07-07T10:00:00+08:00", "updated_at": "2026-07-07T10:00:00+08:00",
+        }],
+        "active_ids": [20], "generated_at": "2026-07-07T12:00:00+08:00",
+    }
+    _fake_fetch(monkeypatch, feed)
+    kb_remote.sync()
+
+    art = kb_indexer.load_kb_article("hs_20")
+    assert art["title"] == "課程退費 --- 常見問題"  # 標題完整
+    assert art["verbatim"] is True                  # 照答旗標沒遺失
+    assert art["url"] == "http://hs.test/zh-tw/article/std1"
+    assert art["content"] == "可以，7 天內辦理。"    # 內文乾淨、不含洩漏的中繼資料
+
+
+def test_invalid_id_skipped_not_crash(remote_env, monkeypatch):
+    """審查發現(中/資安):缺 id 或 id 非數字(路徑跳脫)→ 略過該篇,不炸、不寫到別的檔。"""
+    feed = {
+        "articles": [
+            {"id": "../../evil", "title": "壞", "body_text": "x", "status": "visible", "url": None},
+            {"title": "沒id", "body_text": "y", "status": "visible", "url": None},
+            {"id": 21, "title": "好文章", "category": "c", "body_text": "正常", "status": "visible",
+             "url": "http://hs.test/zh-tw/article/ok", "verbatim": False,
+             "updated_at": "2026-07-07T10:00:00+08:00"},
+        ],
+        "active_ids": [21], "generated_at": "2026-07-07T12:00:00+08:00",
+    }
+    _fake_fetch(monkeypatch, feed)
+    stats = kb_remote.sync()
+
+    assert stats["indexed"] == 1  # 只有合法那篇
+    assert {e["id"] for e in kb_indexer._load_kb_index()} == {"hs_21"}
+    assert not (remote_env / "kb_remote" / "hs_../../evil.md").exists()
+
+
+def test_empty_active_ids_does_not_wipe_when_no_updates(remote_env, monkeypatch):
+    """審查發現(中):回應成功但 active_ids 意外全空且本次無更新 → 不清空整庫(防對方查詢 bug 誤刪)。"""
+    _fake_fetch(monkeypatch, FEED)
+    kb_remote.sync()  # 先有 hs_12/hs_15
+
+    _fake_fetch(monkeypatch, {"articles": [], "active_ids": [], "generated_at": "2026-07-07T13:00:00+08:00"})
+    stats = kb_remote.sync()
+
+    assert stats["pruned"] == 0
+    assert {e["id"] for e in kb_indexer._load_kb_index()} == {"hs_12", "hs_15"}  # 保住
+
+    # 但明確全量同步(full=True)允許歸零(小編真的把全部下架時的手動途徑)
+    _fake_fetch(monkeypatch, {"articles": [], "active_ids": [], "generated_at": "2026-07-07T14:00:00+08:00"})
+    kb_remote.sync(full=True)
+    assert kb_indexer._load_kb_index() == []
+
+
+def test_cursor_rewound_to_avoid_same_second_miss(remote_env, monkeypatch):
+    """審查發現(中):游標往回退安全邊界,避免查詢空檔/同秒編輯永久漏抓。"""
+    _fake_fetch(monkeypatch, FEED)  # generated_at=2026-07-07T12:00:00+08:00
+    kb_remote.sync()
+
+    state = json.loads((remote_env / "kb_remote_state.json").read_text(encoding="utf-8"))
+    from datetime import datetime
+    cursor = datetime.fromisoformat(state["last_generated_at"])
+    gen = datetime.fromisoformat("2026-07-07T12:00:00+08:00")
+    assert cursor < gen  # 游標比 generated_at 早(退了安全邊界)

@@ -31,12 +31,30 @@ def _load_kb_index() -> list[dict]:
 
 
 def load_kb_article(article_id: str) -> dict | None:
-    """讀取文章全文並解析 front matter + 內文。hs_ 前綴=遠端文章(data/kb_remote/),其餘=本地 data/kb/。"""
+    """讀取文章全文。hs_ 前綴=遠端文章:內文讀 data/kb_remote/ 的純內文檔,
+    title/category/url/verbatim 一律以 JSON 索引為權威(不靠 front matter,免標題含 '---' 解析錯位)。
+    其餘=本地 data/kb/:照舊解析 front matter + 內文。"""
     from core import kb_remote
 
-    dir_env = ("KB_REMOTE_DIR", "data/kb_remote") \
-        if article_id.startswith(kb_remote.REMOTE_PREFIX) else ("KB_DIR", "data/kb")
-    kb_dir = Path(os.getenv(*dir_env))
+    if article_id.startswith(kb_remote.REMOTE_PREFIX):
+        meta = kb_remote.remote_meta(article_id)
+        if not meta:
+            logger.warning("遠端 KB 索引無此文章（可能已下架）：%s", article_id)
+            return None
+        path = Path(os.getenv("KB_REMOTE_DIR", "data/kb_remote")) / f"{article_id}.md"
+        if not path.exists():
+            logger.warning("遠端 KB 內文檔不存在：%s", path)
+            return None
+        return {
+            "id": article_id,
+            "title": meta.get("title", ""),
+            "category": meta.get("category", ""),
+            "url": meta.get("url"),
+            "verbatim": bool(meta.get("verbatim")),
+            "content": path.read_text(encoding="utf-8").strip(),
+        }
+
+    kb_dir = Path(os.getenv("KB_DIR", "data/kb"))
     path = kb_dir / f"{article_id}.md"
     if not path.exists():
         logger.warning("KB 文章不存在：%s", path)

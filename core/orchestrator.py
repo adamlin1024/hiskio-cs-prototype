@@ -303,6 +303,12 @@ def _execute_answer_with_faq(state, user_message, decision, session_id) -> dict:
     )
 
 
+def _is_verbatim(article: dict) -> bool:
+    """#18 照答旗標:本地 md front matter 解析成字串 "true";遠端索引卡是布林,兩種都認。"""
+    v = article.get("verbatim")
+    return v is True or str(v).lower() == "true"
+
+
 def _execute_answer_with_kb(state, user_message, decision, session_id) -> dict:
     """照決定單編號取 KB 全文 → 寫手。編號→全文由程式做,零失真。"""
     state["intent_state"]["consecutive_unclear_count"] = 0
@@ -319,12 +325,16 @@ def _execute_answer_with_kb(state, user_message, decision, session_id) -> dict:
         logger.warning("kb 文章讀取全數失敗 ids=%r,降級提議轉真人", decision.get("kb_article_ids"))
         return _execute_suggest_ticket(state, user_message, decision, session_id)
 
-    # #18 照答:首選文章標了 verbatim(標準答案)→ 跳過寫手,一字不改用內文——不被 AI 潤飾走味,也零 LLM 花費。
-    # (md front matter 解析出來是字串 "true";遠端索引卡是布林,兩種都認)
-    top_verbatim = articles[0].get("verbatim") is True or str(articles[0].get("verbatim", "")).lower() == "true"
-    if top_verbatim:
-        articles = articles[:1]  # 照答=只用這一篇(來源標註也只列它)
-        ai_response = str(articles[0].get("content", "")).strip()
+    # #18 照答:被挑中的文章裡只要有一篇標了 verbatim(標準答案)→ 用它、跳過寫手一字不改回內文。
+    # 掃全部(不只 articles[0])——分診腦不保證把最相關那篇排第一,標準答案排第二也要照答。
+    # 內文為空的 verbatim 不觸發(避免回一句空白),退回寫手正常改寫。
+    verbatim_article = next(
+        (a for a in articles if _is_verbatim(a) and str(a.get("content") or "").strip()),
+        None,
+    )
+    if verbatim_article:
+        articles = [verbatim_article]  # 照答=只用這一篇(來源標註也只列它)
+        ai_response = str(verbatim_article["content"]).strip()
     else:
         ai_response = cs_response.respond(state, articles, user_message)
     state["kb_context"]["articles_used_in_response"] = [a["id"] for a in articles]
