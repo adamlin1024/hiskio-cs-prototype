@@ -235,21 +235,87 @@ def test_invalid_id_skipped_not_crash(remote_env, monkeypatch):
     assert not (remote_env / "kb_remote" / "hs_../../evil.md").exists()
 
 
-def test_empty_active_ids_does_not_wipe_when_no_updates(remote_env, monkeypatch):
-    """審查發現(中):回應成功但 active_ids 意外全空且本次無更新 → 不清空整庫(防對方查詢 bug 誤刪)。"""
+# ===== 審查後補洞(2026-07-08 第二輪 Opus 健檢) =====
+
+def test_empty_active_ids_present_prunes_all(remote_env, monkeypatch):
+    """第二輪(中,修正首輪誤判):回應健康但 active_ids=[](小編把全部文章下架)→ 誠實清空,
+    機器人不再拿已下架內容回答。首輪『空 active 一律不剪』會讓全下架永遠卡住,此為根治。"""
     _fake_fetch(monkeypatch, FEED)
     kb_remote.sync()  # 先有 hs_12/hs_15
 
     _fake_fetch(monkeypatch, {"articles": [], "active_ids": [], "generated_at": "2026-07-07T13:00:00+08:00"})
     stats = kb_remote.sync()
 
+    assert stats["pruned"] == 2
+    assert kb_indexer._load_kb_index() == []  # 全清空、閉嘴
+
+
+def test_missing_active_ids_key_does_not_wipe(remote_env, monkeypatch):
+    """第二輪(中):真正該防的是『回應壞掉、根本沒給 active_ids 欄位』——這時才保守不剪、保住舊資料。
+    以「有沒有這個欄位」判斷,而非「是不是空的」。"""
+    _fake_fetch(monkeypatch, FEED)
+    kb_remote.sync()
+
+    # 回應缺 active_ids 欄位(格式壞掉/舊版回應)
+    _fake_fetch(monkeypatch, {"articles": [], "generated_at": "2026-07-07T13:00:00+08:00"})
+    stats = kb_remote.sync()
+
     assert stats["pruned"] == 0
     assert {e["id"] for e in kb_indexer._load_kb_index()} == {"hs_12", "hs_15"}  # 保住
 
-    # 但明確全量同步(full=True)允許歸零(小編真的把全部下架時的手動途徑)
-    _fake_fetch(monkeypatch, {"articles": [], "active_ids": [], "generated_at": "2026-07-07T14:00:00+08:00"})
+    # 全量同步(full=True)仍允許歸零(手動途徑,不受防呆擋)
+    _fake_fetch(monkeypatch, {"articles": [], "generated_at": "2026-07-07T14:00:00+08:00"})
     kb_remote.sync(full=True)
     assert kb_indexer._load_kb_index() == []
+
+
+def test_wrong_shape_feed_keeps_cache(remote_env, monkeypatch):
+    """第二輪(中):合法 JSON 但結構不對(回陣列/字串)→ 視同失敗,沿用快取、不讓 sync 拋例外炸開機線程。"""
+    _fake_fetch(monkeypatch, FEED)
+    kb_remote.sync()
+
+    _fake_fetch(monkeypatch, ["not", "a", "dict"])
+    stats = kb_remote.sync()
+
+    assert stats.get("error")
+    assert {e["id"] for e in kb_indexer._load_kb_index()} == {"hs_12", "hs_15"}
+
+
+def test_corrupt_index_file_non_list_is_ignored(remote_env, monkeypatch):
+    """第二輪(弱):遠端索引檔被損成合法 JSON 但非 list(如 {})→ 當空清單,不讓合併載入 TypeError。"""
+    _fake_fetch(monkeypatch, FEED)
+    kb_remote.sync()
+
+    (remote_env / "kb_remote_index.json").write_text("{}", encoding="utf-8")
+    kb_indexer._load_kb_index.cache_clear()
+
+    assert kb_remote.load_remote_index() == []
+    assert kb_indexer._load_kb_index() == []  # 本地空 + 遠端當空 → 不炸
+
+
+def test_article_not_in_active_ids_skipped_no_waste(remote_env, monkeypatch):
+    """第二輪(弱):對方回了某篇更新卻沒把它列進 active_ids → 不寫檔、不花 LLM 索引(反正要被剪)。"""
+    called = []
+    monkeypatch.setattr(
+        kb_remote, "_llm_index_card",
+        lambda t, c, b: (called.append(t), {"summary": "s", "key_questions": [t]})[1],
+    )
+    feed = {
+        "articles": [
+            {"id": 30, "title": "會被剪", "category": "c", "body_text": "x", "status": "hidden",
+             "url": None, "updated_at": "2026-07-07T10:00:00+08:00"},
+            {"id": 31, "title": "留著", "category": "c", "body_text": "y", "status": "visible",
+             "url": "http://hs.test/a", "updated_at": "2026-07-07T10:00:00+08:00"},
+        ],
+        "active_ids": [31], "generated_at": "2026-07-07T12:00:00+08:00",
+    }
+    _fake_fetch(monkeypatch, feed)
+    stats = kb_remote.sync()
+
+    assert stats["indexed"] == 1        # 只 index 了在 active 的那篇
+    assert called == ["留著"]           # 被剪的那篇沒花 LLM
+    assert not (remote_env / "kb_remote" / "hs_30.md").exists()
+    assert {e["id"] for e in kb_indexer._load_kb_index()} == {"hs_31"}
 
 
 def test_cursor_rewound_to_avoid_same_second_miss(remote_env, monkeypatch):

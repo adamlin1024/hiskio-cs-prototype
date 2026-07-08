@@ -79,10 +79,15 @@ def load_remote_index() -> list[dict]:
     if not index_path.exists():
         return []
     try:
-        return json.loads(index_path.read_text(encoding="utf-8"))
+        data = json.loads(index_path.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001 — 壞檔不擋服務,重同步會蓋回
         logger.exception("kb_remote index 讀取失敗:%s", index_path)
         return []
+    if not isinstance(data, list):
+        # 損成合法 JSON 但非 list(例 {})→ 當空清單,避免 kb_indexer 的 `local + 遠端` 變 TypeError(審查 F6)
+        logger.warning("kb_remote index 結構非預期(非 list),當空清單:%s", index_path)
+        return []
+    return data
 
 
 def sync(full: bool = False) -> dict:
@@ -104,9 +109,21 @@ def sync(full: bool = False) -> dict:
             logger.warning("kb_remote 同步失敗(沿用最後快取):%s", exc)
             return {"error": str(exc)}
 
-        articles = feed.get("articles") or []
+        # 回應必須是 JSON 物件;合法 JSON 但結構不對(陣列/字串/null)＝視同失敗,沿用最後快取、
+        # 不讓後續 .get() 連鎖拋例外把 sync 或開機背景線程炸掉(審查 F3)。
+        if not isinstance(feed, dict):
+            logger.warning("kb_remote 同步:回應結構非物件(%s),沿用最後快取", type(feed).__name__)
+            return {"error": "unexpected feed shape"}
+
+        raw_articles = feed.get("articles")
+        articles = raw_articles if isinstance(raw_articles, list) else []
+        raw_active = feed.get("active_ids")
+        # 用「回應有沒有給 active_ids 這個欄位」判斷回應是否健康,而不是「它是不是空的」:
+        # HiSupport 一定回這個欄位——空陣列＝小編真的把全部文章下架(該照清、機器人閉嘴);
+        # 欄位缺席/型別不對＝回應壞掉(才保守不剪,見下方剪枝防呆,審查 F2/F6)。
+        active_ids_present = isinstance(raw_active, list)
         # active_ids 只收「乾淨數字 id」(防禦:對方資料異常時不讓髒 id 汙染剪枝集合)
-        active = {f"{REMOTE_PREFIX}{i}" for i in (feed.get("active_ids") or []) if _valid_id(i)}
+        active = {f"{REMOTE_PREFIX}{i}" for i in (raw_active or []) if _valid_id(i)}
 
         index = {e["id"]: e for e in load_remote_index()}
 
@@ -115,11 +132,16 @@ def sync(full: bool = False) -> dict:
         kb_dir.mkdir(parents=True, exist_ok=True)
         indexed = 0
         for art in articles:
+            if not isinstance(art, dict):
+                continue
             raw_id = art.get("id")
             if not _valid_id(raw_id):
                 logger.warning("kb_remote 略過無效 id 的文章:%r", raw_id)
                 continue
             rid = f"{REMOTE_PREFIX}{raw_id}"
+            # active_ids 有給、但這篇不在其中＝反正稍後會被剪 → 不寫檔、不花寫手 LLM 建索引卡(審查 F7)
+            if active_ids_present and rid not in active:
+                continue
             body = (art.get("body_text") or "").strip()
             title = (art.get("title") or "").strip()
             category = (art.get("category") or "").strip()
@@ -136,13 +158,14 @@ def sync(full: bool = False) -> dict:
             indexed += 1
 
         # 2) 剪枝:不在 active_ids=被停用/隱藏改草稿/刪除 → 索引與內文一起移除。
-        #    防呆:active_ids 全空但本地原本有資料、且本次也沒有任何更新 → 疑似對方查詢異常,
-        #    不執行大規模清空(避免一次刪光整庫);全量同步(full=True)才允許歸零。
+        #    防呆改判「回應到底有沒有給 active_ids 欄位」:欄位缺席(回應壞掉)且本地原本有料 → 不剪、保住舊資料;
+        #    欄位有給(即使是空陣列)＝信任它,空就是全下架、照清(修正首輪『空即不剪』會讓全下架永遠卡住)。
+        #    全量同步(full=True)一律允許歸零。
         pruned = 0
-        suspicious_wipe = not active and index and not articles and not full
+        suspicious_wipe = (not active_ids_present) and bool(index) and not full
         if suspicious_wipe:
             logger.warning(
-                "kb_remote:active_ids 為空但本地有 %d 篇且本次無更新,疑似異常,跳過剪枝(可手動全量同步歸零)",
+                "kb_remote:回應缺 active_ids 欄位但本地有 %d 篇,疑似回應異常,跳過剪枝(可手動全量同步歸零)",
                 len(index),
             )
         else:
