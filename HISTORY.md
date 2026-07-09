@@ -2,6 +2,12 @@
 
 每次重要更新（KB Review、規格升級、架構調整）追加在最上方。
 
+## 2026-07-09 — 知識單一真理:遠端啟用=本地 KB 全數退場
+- 動機:#7 接上 HiSupport 說明中心後,`_load_kb_index()` 是「本地(7/4 凍結拷貝 32 篇)＋遠端(說明中心現行版 32 篇)」合併——同內容兩份並存,說明中心編輯只動遠端,分診腦可能引到過期拷貝(Adam 拍板:以說明中心為準,本機測的不算數)。
+- 作法:`kb_indexer._load_kb_index()` 改「遠端啟用(HISUPPORT_KB_URL 有設)→只回遠端 hs_*;停用→純本地」。斷線韌性(沿用最後快取/防誤清)本來就在 kb_remote 內部,不重複兜底。FAQ 22 條自包含(question_patterns/core_steps/fallback_message),不受影響。
+- 測試:新增 2 顆釘死(遠端啟用=本地退場/停用=純本地);test_brain 的 kb_env fixture 補「明確關遠端」(開發機 .env 有 HISUPPORT_KB_URL 會讓本地白名單隱形);全套 124 綠。
+- 注意:`data/kb/`+`data/kb_index.json` 檔案保留(本機純本地開發還在用);雲端(遠端啟用)等於它們退役。
+
 ## 2026-07-06 — v8「一顆腦」架構收斂(P0~P4 完整落地)
 - 動機:①7/4 換 DeepSeek V4 後「查不到 KB/時好時壞/20~40 秒」——根因=V4 全系列自動思考,
   思考 token 吃掉小額度呼叫(faq_matcher/kb_indexer max_tokens=100)→ 空答靜默失敗;

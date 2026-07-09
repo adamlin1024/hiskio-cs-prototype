@@ -17,17 +17,21 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=1)
 def _load_kb_index() -> list[dict]:
-    """本地索引＋遠端(HiSupport 說明中心,#7)索引合併;遠端停用時=純本地(現行行為)。"""
-    path = Path(os.getenv("KB_INDEX_PATH", "data/kb_index.json"))
-    local: list[dict] = []
-    if path.exists():
-        local = json.loads(path.read_text(encoding="utf-8"))
-    else:
-        logger.warning("kb_index.json 不存在。請先跑 tools/_hibot_build_indexes.py")
-
+    """知識單一真理(Adam 2026-07-09 拍板「以說明中心為準」):
+    遠端(HiSupport 說明中心)啟用=只回遠端 hs_* 索引,本地 kb_index 全數退場——
+    不讓「凍結拷貝＋說明中心現行版」兩份並存,避免分診腦引到過期內容;
+    遠端停用(HISUPPORT_KB_URL 未設)=純本地,本機開發行為不變。
+    遠端端的斷線韌性(沿用最後快取/防誤清)在 kb_remote 內部,這裡不重複兜底。"""
     from core import kb_remote
 
-    return local + kb_remote.load_remote_index()
+    if kb_remote.enabled():
+        return kb_remote.load_remote_index()
+
+    path = Path(os.getenv("KB_INDEX_PATH", "data/kb_index.json"))
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    logger.warning("kb_index.json 不存在。請先跑 tools/_hibot_build_indexes.py")
+    return []
 
 
 def load_kb_article(article_id: str) -> dict | None:

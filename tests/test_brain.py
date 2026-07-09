@@ -22,6 +22,9 @@ def kb_env(tmp_path, monkeypatch):
     (tmp_path / "kb_index.json").write_text(json.dumps(idx, ensure_ascii=False), encoding="utf-8")
     monkeypatch.setenv("FAQ_PATH", str(tmp_path / "faq.json"))
     monkeypatch.setenv("KB_INDEX_PATH", str(tmp_path / "kb_index.json"))
+    # 本 fixture＝「本地白名單」模式:明確關遠端(單一真理改版後遠端啟用=本地退場;
+    # 開發機 .env 有 HISUPPORT_KB_URL,不關會讓本地 kb_001 隱形)
+    monkeypatch.delenv("HISUPPORT_KB_URL", raising=False)
     faq_matcher._load_faq.cache_clear()
     kb_indexer._load_kb_index.cache_clear()
     brain.reset_caches()

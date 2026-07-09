@@ -328,3 +328,32 @@ def test_cursor_rewound_to_avoid_same_second_miss(remote_env, monkeypatch):
     cursor = datetime.fromisoformat(state["last_generated_at"])
     gen = datetime.fromisoformat("2026-07-07T12:00:00+08:00")
     assert cursor < gen  # 游標比 generated_at 早(退了安全邊界)
+
+
+def test_remote_enabled_retires_local_kb(remote_env, monkeypatch, tmp_path):
+    """單一真理(Adam 2026-07-09 拍板「以說明中心為準」):遠端啟用時本地 kb_index 全數退場,
+    分診腦只看得到說明中心的 hs_* 文章——本地凍結拷貝不得與現行版並存(避免引到過期內容)。"""
+    (tmp_path / "kb_index.json").write_text(
+        json.dumps([{"id": "kb_001", "title": "舊拷貝", "category": "課程購買", "summary": "x", "key_questions": []}]),
+        encoding="utf-8",
+    )
+    _fake_fetch(monkeypatch, FEED)
+    kb_remote.sync()
+
+    ids = {e["id"] for e in kb_indexer._load_kb_index()}
+    assert ids == {"hs_12", "hs_15"}  # 只有遠端;kb_001 退場
+
+
+def test_remote_disabled_uses_local_only(monkeypatch, tmp_path):
+    """遠端停用(HISUPPORT_KB_URL 未設)=純本地,本機開發行為不變。"""
+    monkeypatch.delenv("HISUPPORT_KB_URL", raising=False)
+    (tmp_path / "kb_index.json").write_text(
+        json.dumps([{"id": "kb_001", "title": "本地", "category": "課程購買", "summary": "x", "key_questions": []}]),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KB_INDEX_PATH", str(tmp_path / "kb_index.json"))
+    monkeypatch.setenv("KB_REMOTE_INDEX_PATH", str(tmp_path / "kb_remote_index.json"))
+    _bust()
+    ids = {e["id"] for e in kb_indexer._load_kb_index()}
+    _bust()
+    assert ids == {"kb_001"}
