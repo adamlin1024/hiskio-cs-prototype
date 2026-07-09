@@ -33,6 +33,14 @@ Python 3.11 + FastAPI + SQLite + **模型無關 LLM 層**（可插拔：直連 A
 
 **遠端知識來源（#7，2026-07-08 起）**：設 `HISUPPORT_KB_URL`（＋`HISUPPORT_KB_KEY`）後，KB 另從 HiSupport 說明中心「啟用中」文章合併進來（`core/kb_remote.py`，`hs_` 前綴、落地 `data/kb_remote*`）；未設＝純本地、行為不變。更新全靠事件（開機對齊＋HiSupport 門鈴 `POST /api/kb/refresh`），**禁止加定時輪詢**（Adam 拍板）。
 
+### 知識來源地圖（2026-07-10 Adam 定案，回答「這句話哪來的」時照這張表）
+機器人對外講的每句話，來源只有三種，衝突時**以 Adam 最新的話為準**：
+1. **說明中心文章（KB）**——Adam 在 HiSupport 後台管理，門鈴自動同步，改後台=機器人跟著變。
+2. **FAQ 標準答案（`data/faq.json`）**——人工維護的獨立資料，**文章只是來源之一**；另含真實客服對話整理、以及 Adam 口頭定的營運規則（客服時效、退款規則等，文章未必有寫）。變更由 Claude 手動改、推 main 上線。
+3. **後台可調設定**——人設、機器人名字、轉真人固定訊息、歡迎語等，Adam 在 HiSupport 後台直接改。
+
+配套紀律：凡把 Adam 口頭定的營運規則寫進 FAQ，回報時必須明講「這條進了 FAQ、後台看不到」；同一資訊若同時存在 FAQ 與後台設定（如客服時效），改任一邊都要檢查另一邊有沒有跟上。
+
 ### 重要約束
 - KB 兩層分離：`data/kb_source/`（原稿）與 `data/kb/`（系統檔）
 - FAQ 兩層分離：`data/faq_source/`（原稿）與 `data/faq.json`（系統檔）
