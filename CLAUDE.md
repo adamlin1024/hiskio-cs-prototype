@@ -31,7 +31,8 @@ Python 3.11 + FastAPI + SQLite + **模型無關 LLM 層**（可插拔：直連 A
 用 `/kb-review` skill 啟動完整流程（KB / FAQ / 最近問答審視，互動式更新）。
 使用者只需丟資料 + 確認統籌文件，其他全自動。
 
-**遠端知識來源（#7，2026-07-08 起）**：設 `HISUPPORT_KB_URL`（＋`HISUPPORT_KB_KEY`）後，KB 另從 HiSupport 說明中心「啟用中」文章合併進來（`core/kb_remote.py`，`hs_` 前綴、落地 `data/kb_remote*`）；未設＝純本地、行為不變。更新全靠事件（開機對齊＋HiSupport 門鈴 `POST /api/kb/refresh`），**禁止加定時輪詢**（Adam 拍板）。
+**遠端知識來源（#7，2026-07-08 起）**：設 `HISUPPORT_KB_URL`（＋`HISUPPORT_KB_KEY`）後，KB 從 HiSupport 說明中心「啟用中」文章合併進來（`core/kb_remote.py`，`hs_` 前綴、落地 `data/kb_remote*`）；未設＝純本地、行為不變。更新全靠事件（開機對齊＋HiSupport 門鈴 `POST /api/kb/refresh`），**禁止加定時輪詢**（Adam 拍板）。
+**正式機落地檔要放持久磁碟**（2026-07-11 實抓根治）：Railway 已設 `KB_REMOTE_INDEX_PATH=/data/kb_remote_index.json`、`KB_REMOTE_DIR=/data/kb_remote`、`KB_REMOTE_STATE_PATH=/data/kb_remote_state.json`——否則每次部署容器全新、索引卡全重建（34 篇×LLM 約 1~2 分鐘），期間機器人「零知識」亂轉真人。放 /data 後重部署秒回暖（已實測：部署完成下一秒即答對）。
 
 ### 知識來源地圖（2026-07-11 更新：FAQ 已退役，單一根＝說明中心文章）
 機器人對外講的每句話，來源只有**兩**種，衝突時**以 Adam 最新的話為準**：
