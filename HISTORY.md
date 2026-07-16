@@ -2,6 +2,9 @@
 
 每次重要更新（KB Review、規格升級、架構調整）追加在最上方。
 
+## 2026-07-17 — 金鑰用量接口 /api/billing（花費面板）
+- 給 HiSupport 後台「連線狀態」面板顯示花費:查 OpenRouter /api/v1/auth/key=**這支金鑰**的 limit/usage/remaining(非整帳戶——帳戶下還有其他專案金鑰,各算各的,Adam 拍板);5 分鐘記憶體快取,面板開頁不會變成對 OpenRouter 的輪詢;查詢失敗回 502、面板顯示「——」不擋頁。
+
 ## 2026-07-16 — 交接摘要重整＋提議句消毒＋期待管理訊息水管勘誤（Adam 口述批次）
 - **期待管理訊息從未生效的兩截水管（實抓）**：①HiSupport `pushConfig` 送頂層 `handoff_message`，但本端 `/api/config` 白名單只認巢狀 `messages.handoff_message` → 自 7/4 一直被靜默忽略，靠「兩邊內建預設同字」遮掩，Adam 自訂文字後才露餡（HiSupport 端已改巢狀）。②正式機 `RUNTIME_CONFIG_PATH` 被 Git Bash 路徑轉換寫成 `C:/Program Files/Git/data/...`＝容器暫存區、部署即清空 → 已改 `/data/runtime_config.json`（持久磁碟，與 7/11 kb_remote 同病同醫）。
 - **交接摘要重整**（`build_handoff_summary`，目的＝真人 10 秒抓重點、不寫廢話）：「客戶想解決」改「待處理問題」＝intent_log 未結案項清單（舊版拿 issue.summary＝最後一輪字面，轉真人當下永遠是「用戶要求轉真人」＝零資訊）；「問題類別」拿掉；情緒只在非中性才列；handoff_reason 細分 `user_request`（用戶點名要真人）並改標籤（needs_human＝「需要查詢用戶個人帳務／資料」、no_kb_match＝「可考慮補說明文章」）。

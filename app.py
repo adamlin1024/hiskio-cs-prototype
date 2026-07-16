@@ -245,6 +245,50 @@ def kb_refresh():
     return stats
 
 
+# 金鑰用量快取（5 分鐘）：後台面板每次開頁都會問，別讓它變成對 OpenRouter 的輪詢
+_billing_cache: dict = {"at": 0.0, "data": None}
+
+
+@app.get("/api/billing")
+def billing():
+    """HiBot 自己這支 OpenRouter 金鑰的用量（給 HiSupport 後台「連線狀態」面板顯示花費）。
+
+    只查「本金鑰」的 limit/usage（OpenRouter /api/v1/auth/key），不是整個帳戶——
+    帳戶下還有其他專案的金鑰，各算各的（Adam 2026-07-17 拍板）。
+    """
+    import time as _time
+    import urllib.request as _rq
+
+    now = _time.time()
+    if _billing_cache["data"] is not None and now - _billing_cache["at"] < 300:
+        return _billing_cache["data"]
+
+    api_key = (os.getenv("OPENROUTER_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(status_code=409, detail="未設定 OPENROUTER_API_KEY")
+    try:
+        req = _rq.Request(
+            "https://openrouter.ai/api/v1/auth/key",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        with _rq.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read()).get("data") or {}
+    except Exception as e:  # noqa: BLE001 — 對外查詢失敗不炸面板,回 502 讓後台顯示「查不到」
+        logger.warning("OpenRouter 用量查詢失敗:%s", e)
+        raise HTTPException(status_code=502, detail="OpenRouter 用量查詢失敗") from e
+
+    out = {
+        "provider": "openrouter",
+        "scope": "key",  # 本金鑰,非整個帳戶
+        "limit_usd": data.get("limit"),  # null=無上限
+        "usage_usd": round(float(data.get("usage") or 0.0), 4),
+        "remaining_usd": data.get("limit_remaining"),
+    }
+    _billing_cache["at"] = now
+    _billing_cache["data"] = out
+    return out
+
+
 @app.get("/health")
 def health():
     """給 HiSupport 偵測 HiBot 活著沒；掛掉時 HiSupport 端可自動把對話轉真人。"""
