@@ -58,7 +58,8 @@ def _sanitize(data: dict) -> dict:
                 iv = int(v)
             except (TypeError, ValueError, OverflowError):
                 continue
-            if iv > 0:
+            # max_daily_messages 接受 0=「明確設成無上限」(清掉先前注入);其他門檻 0 無意義,維持 >0
+            if iv > 0 or (iv == 0 and k == "max_daily_messages"):
                 thresholds[k] = iv
     return {"prompts": prompts, "messages": messages, "thresholds": thresholds}
 

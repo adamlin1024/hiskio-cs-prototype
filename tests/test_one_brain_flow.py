@@ -55,13 +55,14 @@ def _canned_decision(action="clarify", **extra):
 
 
 def test_daily_quota_blocks_without_llm(db, monkeypatch):
-    """超額:固定話術+進兩段式轉真人,分診腦絕不能被呼叫。"""
+    """有設上限且超額:固定話術+進兩段式轉真人,分診腦絕不能被呼叫。"""
     from datetime import date
 
     def _boom(*a, **k):
         raise AssertionError("配額滿了不該呼叫分診腦")
 
     monkeypatch.setattr(brain, "decide", _boom)
+    runtime_config.set_overlay({"thresholds": {"max_daily_messages": 30}})
     s = _fresh_state()
     s["service_limits"]["daily_date"] = date.today().isoformat()
     s["service_limits"]["daily_count"] = 30
@@ -99,6 +100,32 @@ def test_daily_quota_threshold_injectable(db, monkeypatch):
     state_mod.save_state(s)
     res = orchestrator.handle_user_message(s["session_id"], "hi 這是第三句")
     assert res["response_type"] == "daily_limit"
+
+
+def test_daily_quota_default_unlimited(db, monkeypatch):
+    """預設無上限(Adam 2026-07-17):沒注入門檻時,當日講再多句都照常進分診腦。"""
+    from datetime import date
+    monkeypatch.setattr(brain, "decide", lambda st, msg: _canned_decision())
+    s = _fresh_state()
+    s["service_limits"]["daily_date"] = date.today().isoformat()
+    s["service_limits"]["daily_count"] = 999
+    state_mod.save_state(s)
+    res = orchestrator.handle_user_message(s["session_id"], "第一千句照常回")
+    assert res["response_type"] == "clarification"  # 正常走到分診腦,沒被配額擋
+
+
+def test_daily_quota_inject_zero_clears_limit(db, monkeypatch):
+    """注入 0=明確清除限制(後台欄位清空時推 0,蓋掉先前注入的值)。"""
+    from datetime import date
+    monkeypatch.setattr(brain, "decide", lambda st, msg: _canned_decision())
+    runtime_config.set_overlay({"thresholds": {"max_daily_messages": 2}})
+    runtime_config.set_overlay({"thresholds": {"max_daily_messages": 0}})
+    s = _fresh_state()
+    s["service_limits"]["daily_date"] = date.today().isoformat()
+    s["service_limits"]["daily_count"] = 5
+    state_mod.save_state(s)
+    res = orchestrator.handle_user_message(s["session_id"], "超過舊門檻也照常")
+    assert res["response_type"] == "clarification"
 
 
 # ── 「好吧」誤結案修正(規格 §4)──────────────────────────────────

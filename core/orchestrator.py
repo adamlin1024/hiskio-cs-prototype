@@ -40,7 +40,7 @@ from nodes import (
 logger = logging.getLogger(__name__)
 
 MAX_UNCLEAR_BEFORE_FORCE_TICKET = 3
-DEFAULT_MAX_DAILY_MESSAGES = 30  # 每日訊息配額預設(規格 §14-8;後台可注入 max_daily_messages)
+DEFAULT_MAX_DAILY_MESSAGES = 0  # 每日訊息配額預設:0=無上限(Adam 2026-07-17 拍板:預設不限制,後台有填才有;注入 0=清除限制)
 OFF_TOPIC_BLOCKED_MSG = "對話僅處理 HiSKIO 服務相關問題，如無客服需求請關閉視窗。"
 GREETING_BLOCKED_MSG = (
     "如果您有客服問題（影片、退款、帳號等），請直接描述問題；"
@@ -182,7 +182,8 @@ def _check_daily_quota(state: dict, user_message: str, session_id: str) -> dict 
     """每日訊息配額守衛(規格 §14-8)。回傳 None=額度內放行(並計數)。
 
     超額:固定話術+進「等待轉真人確認」(用戶回「好」即交接),完全不打 LLM。
-    正常學員一天問不到門檻(預設 30),無感;惡意洗版則被斷糧(不再燒模型費)。
+    預設無上限(Adam 2026-07-17);後台注入 max_daily_messages>0 才啟用、注入 0=清除限制。
+    無上限時仍照常計數(留統計,之後要開限制隨時有數字)。金鑰本身有 US$5 上限兜底。
     """
     sl = state["service_limits"]
     today = date.today().isoformat()
@@ -191,7 +192,8 @@ def _check_daily_quota(state: dict, user_message: str, session_id: str) -> dict 
         sl["daily_count"] = 0
 
     limit = runtime_config.get_threshold("max_daily_messages", DEFAULT_MAX_DAILY_MESSAGES)
-    if sl["daily_count"] >= limit:
+    # limit<=0=無上限(預設):只計數不擋(留統計,之後要開限制隨時有數字)
+    if limit > 0 and sl["daily_count"] >= limit:
         logger.info("session=%s 每日配額 %d 已滿,擋下並提議轉真人", session_id, limit)
         state["ticket_state"]["ticket_suggested"] = True
         state["ticket_state"]["handoff_reason"] = "daily_limit"
