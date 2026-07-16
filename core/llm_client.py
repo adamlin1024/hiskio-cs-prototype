@@ -82,8 +82,9 @@ def call_role(
     cache_system: bool = False,
     fallback: str = "",
     registry=None,
+    images: list[str] | None = None,
 ) -> str:
-    """依「等級」呼叫模型，失敗時記 log 並回傳 fallback 字串。"""
+    """依「等級」呼叫模型，失敗時記 log 並回傳 fallback 字串。images=data URI 清單(讀圖員用)。"""
     # 全程納入防護：設定/等級解析與呼叫都可能出錯，對外請求一律優雅退化回 fallback。
     # 設定寫錯的「大聲報錯」改由 app 啟動時 validate_model_config 負責，
     # 在開機階段就擋下壞設定，不讓它流到線上請求（見 app.py startup）。
@@ -99,6 +100,7 @@ def call_role(
             temperature=temperature,
             system=system,
             cache_system=cache_system,
+            images=images or None,
             **params,
         )
     except Exception as e:
@@ -117,6 +119,22 @@ def call_role(
         "cost_usd": resp.cost_usd,
     })
     return resp.text
+
+
+def call_vision(
+    prompt: str,
+    images: list[str],
+    *,
+    max_tokens: int = 400,
+    fallback: str = "",
+    registry=None,
+) -> str:
+    """讀圖員：把圖片(data URI)交給視覺模型出文字描述。決策/寫作不歸它管。"""
+    return call_role(
+        "vision", prompt,
+        max_tokens=max_tokens, temperature=0.0,
+        fallback=fallback, registry=registry, images=images,
+    )
 
 
 def call_triage(

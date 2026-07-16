@@ -35,6 +35,7 @@ from nodes import (
     greeting_handler,
     kb_indexer,
     ticket_handler,
+    vision,
 )
 
 logger = logging.getLogger(__name__)
@@ -87,11 +88,21 @@ _KNOWN_PHASES = {"對話中", "等待轉真人確認"}
 # ────────────────────────────────────────────────────────────────────
 
 
-def handle_user_message(session_id: str, user_message: str) -> dict:
-    """主流程入口。"""
+def handle_user_message(session_id: str, user_message: str, image_urls: list[str] | None = None) -> dict:
+    """主流程入口。image_urls＝本輪附圖（讀圖員翻成文字併進問題，決策/寫手不動）。"""
     state = load_state(session_id)
     if state is None:
         raise ValueError(f"找不到 session: {session_id}")
+
+    # 圖片三件套(契約 2026-07-17b):已交接真人就不花讀圖錢(閉環固定回覆用不到);
+    # 其餘情況先把圖翻成文字描述併進問題,讓 chat_history 與分診腦看到同一份完整內容。
+    if image_urls and not state["ticket_state"].get("handed_off"):
+        desc = vision.describe_images(image_urls)
+        base = user_message.strip() or "（用戶傳來圖片）"
+        if desc:
+            user_message = f"{base}\n\n[附圖內容（讀圖員擷取）]\n{desc}"
+        else:
+            user_message = f"{base}\n[用戶附了圖片，但系統無法讀取；圖片已提供給真人客服]"
 
     append_message(state, "user", user_message)
 
@@ -352,6 +363,11 @@ def _execute_answer_with_kb(state, user_message, decision, session_id) -> dict:
         {"title": a.get("title") or "", "url": a["url"]}
         for a in articles if a.get("url")
     ]
+    # 後台測試間用(契約 2026-07-17b):實際用到的全部文章含隱藏篇(無網址);訪客端由 HiSupport 中介、不外流
+    sources_all = [
+        {"id": a.get("id") or "", "title": a.get("title") or "", "hidden": not a.get("url")}
+        for a in articles
+    ]
 
     if ai_response.startswith("[SUGGEST_TICKET]"):
         # 寫手舉手:已答多次仍不滿/金流個案等(寫手指令的嚴格條件)
@@ -367,7 +383,7 @@ def _execute_answer_with_kb(state, user_message, decision, session_id) -> dict:
     return _finalize_turn(
         state, user_message, ai_response, "rag",
         increment_turn=True, session_id=session_id, mark_answered=True,
-        sources=sources,
+        sources=sources, sources_all=sources_all,
     )
 
 
@@ -495,6 +511,7 @@ def _finalize_turn(
     session_id: str,
     mark_answered: bool = False,
     sources: list[dict] | None = None,
+    sources_all: list[dict] | None = None,
 ) -> dict:
     """共用收尾：append、意圖推進、turn_count、save。"""
     append_message(state, "assistant", ai_response, response_type=response_type)
@@ -508,11 +525,12 @@ def _finalize_turn(
 
     save_state(state)
 
-    return _build_response(state, ai_response, response_type, sources=sources)
+    return _build_response(state, ai_response, response_type, sources=sources, sources_all=sources_all)
 
 
 def _build_response(
-    state: dict, ai_response: str, response_type: str, sources: list[dict] | None = None,
+    state: dict, ai_response: str, response_type: str,
+    sources: list[dict] | None = None, sources_all: list[dict] | None = None,
 ) -> dict:
     return {
         "ai_response": ai_response,
@@ -524,6 +542,9 @@ def _build_response(
         "handoff": build_handoff(state),
         # #18 參考來源(回答用到且有公開網址的文章;HiSupport 依後台開關決定要不要附給訪客)
         "sources": sources or [],
+        # 後台測試間用(契約 2026-07-17b):含隱藏篇的完整引用清單(id/title/hidden,無網址);
+        # 訪客端由 HiSupport 中介、永不外流此欄位
+        "sources_all": sources_all or [],
         "state": state,
     }
 

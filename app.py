@@ -163,16 +163,18 @@ def list_mock_users():
 class ChatReq(BaseModel):
     session_id: str
     message: str
+    # 圖片三件套(契約 2026-07-17b):本輪訪客附圖的絕對網址(每日額度由 HiSupport 把關,超額不帶)
+    image_urls: list[str] | None = None
 
 
 @app.post("/api/chat")
 def chat(req: ChatReq):
-    if not req.message.strip():
-        raise HTTPException(status_code=400, detail="message 不可為空")
+    if not req.message.strip() and not (req.image_urls or []):
+        raise HTTPException(status_code=400, detail="message 與 image_urls 不可同時為空")
     state = load_state(req.session_id)
     if state is None:
         raise HTTPException(status_code=404, detail=f"session {req.session_id} 不存在")
-    return orchestrator.handle_user_message(req.session_id, req.message)
+    return orchestrator.handle_user_message(req.session_id, req.message, image_urls=req.image_urls)
 
 
 @app.get("/api/admin/usage")

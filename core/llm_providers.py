@@ -35,7 +35,8 @@ class LLMProvider:
     def complete(self, *, model: str, prompt: str, max_tokens: int,
                  temperature: float, system: str | None = None,
                  cache_system: bool = False,
-                 reasoning_enabled: bool | None = None) -> LLMResponse:
+                 reasoning_enabled: bool | None = None,
+                 images: list[str] | None = None) -> LLMResponse:
         raise NotImplementedError
 
 
@@ -56,8 +57,11 @@ class AnthropicNativeProvider(LLMProvider):
         return self._client
 
     def complete(self, *, model, prompt, max_tokens, temperature,
-                 system=None, cache_system=False, reasoning_enabled=None):
+                 system=None, cache_system=False, reasoning_enabled=None, images=None):
         # reasoning_enabled 是 OpenAI 相容端點(OpenRouter)專用參數;原廠 SDK 不吃 → 優雅忽略。
+        if images:
+            # 讀圖走 openai_compat(vision role);原廠路徑目前不支援 → 記警告、退純文字(不炸)。
+            logger.warning("AnthropicNative 未支援 images 參數,已忽略 %d 張圖", len(images))
         client = self._get_client()
         kwargs: dict[str, Any] = {
             "model": model,
@@ -115,12 +119,18 @@ class OpenAICompatProvider(LLMProvider):
         return self._client
 
     def complete(self, *, model, prompt, max_tokens, temperature,
-                 system=None, cache_system=False, reasoning_enabled=None):
+                 system=None, cache_system=False, reasoning_enabled=None, images=None):
         client = self._get_client()
-        messages: list[dict[str, str]] = []
+        messages: list[dict] = []
         if system:
             messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
+        if images:
+            # 視覺輸入(讀圖員):文字+圖片組成 content 陣列(OpenAI 相容格式;圖=data URI 或公開網址)
+            content: list[dict] = [{"type": "text", "text": prompt}]
+            content.extend({"type": "image_url", "image_url": {"url": u}} for u in images)
+            messages.append({"role": "user", "content": content})
+        else:
+            messages.append({"role": "user", "content": prompt})
         create_kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,

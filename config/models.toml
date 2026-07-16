@@ -35,6 +35,11 @@ provider          = "openrouter"
 model             = "deepseek/deepseek-v4-flash-20260423"
 reasoning_enabled = false
 
+[roles.vision]      # 讀圖員:把用戶附圖轉文字描述(圖片三件套 2026-07-17);決策/寫作不歸它管
+provider          = "openrouter"
+model             = "google/gemini-2.5-flash-lite"
+reasoning_enabled = false
+
 # ── 價目表(USD / 百萬 token)─────────────────────────────
 # 給「供應商沒回傳實際費用」的模型算成本用(例如直連 Anthropic)。
 # 走 OpenRouter 時通常會回傳真實費用,會優先採用、不看這張表。

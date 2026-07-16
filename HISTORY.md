@@ -2,6 +2,12 @@
 
 每次重要更新（KB Review、規格升級、架構調整）追加在最上方。
 
+## 2026-07-17 — 圖片三件套：讀圖員（vision role）＋sources_all（測試間）
+- **讀圖員**（契約 2026-07-17b）：`/api/chat` 新收 `image_urls[]`；`nodes/vision.py` 自抓圖（3 張/輪、6MB、8 秒逾時）轉 base64 → 新 role `vision`（google/gemini-2.5-flash-lite，OpenRouter 同一把金鑰）出文字描述 → 併進 user_message 交原分診腦——**決策與寫手完全不動，讀圖員只當翻譯**。讀圖失敗＝附註「無法讀取」照常走文字流程（本機實撞驗證：URL 壞掉時機器人正常轉真人並提及截圖）。訊息可空（有圖即可）。
+- **sources_all**：回應新增本輪實際用到的全部文章（id/title/hidden，含隱藏篇無網址），給 HiSupport 後台測試間顯示引用；訪客端由 HiSupport 中介不外流。
+- 模型層：providers 加 `images` 參數（openai_compat 組 content 陣列；anthropic 原廠記警告忽略）；`call_vision()` 門面。
+- 驗證：pytest 131 綠（新增 5 顆：描述併入/空訊息佔位/失敗退化/閉環不花讀圖錢/sources_all 隱藏旗標）；本機真瀏覽器 E2E——canvas 畫「付款失敗 E102」貼上送出，分診腦判斷理由出現「KB 無 E102 代碼資料」＝讀圖員真的看懂了圖。brain/寫手 prompt 零改動（考卷不受影響，未重跑）。
+
 ## 2026-07-17 — 金鑰用量接口 /api/billing（花費面板）
 - 給 HiSupport 後台「連線狀態」面板顯示花費:查 OpenRouter /api/v1/auth/key=**這支金鑰**的 limit/usage/remaining(非整帳戶——帳戶下還有其他專案金鑰,各算各的,Adam 拍板);5 分鐘記憶體快取,面板開頁不會變成對 OpenRouter 的輪詢;查詢失敗回 502、面板顯示「——」不擋頁。
 
