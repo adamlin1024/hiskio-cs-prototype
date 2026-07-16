@@ -36,8 +36,9 @@ VALID_ACTIONS = {
 }
 _VALID_ROLES = {"primary", "secondary", "context"}
 # 轉真人精確原因白名單(交接資料要完整,Adam 2026-07-06 拍板):
-# no_kb_match=知識庫沒資料(=該補 KB 的訊號)/needs_human=查個資、點名要真人等
-_VALID_HANDOFF_REASONS = {"no_kb_match", "needs_human"}
+# no_kb_match=知識庫沒資料(=該補 KB 的訊號)/needs_human=查個資等機器人辦不到的事/
+# user_request=用戶點名要真人(2026-07-16 細分:「需要真人協助」對真人客服是零資訊廢話)
+_VALID_HANDOFF_REASONS = {"no_kb_match", "needs_human", "user_request"}
 
 FALLBACK_CLARIFY_MSG = "抱歉，我不太確定您想問的內容，能否再多描述一下您遇到的狀況？"
 

@@ -161,10 +161,10 @@ def append_message(state: dict, role: str, content: str, response_type: str | No
 # ────────────────────────────────────────────────────────────────────
 
 _HANDOFF_REASON_LABEL = {
-    "no_kb_match": "知識庫沒有對應資料",
+    "no_kb_match": "知識庫沒有對應資料（可考慮補說明文章）",
     "unclear_limit": "多次無法理解用戶問題",
-    "user_request": "用戶主動要求真人",
-    "needs_human": "需要真人協助",
+    "user_request": "用戶主動要求轉真人",
+    "needs_human": "需要查詢用戶個人帳務／資料（機器人查不到）",
     "daily_limit": "當日訊息量達上限（防資源濫用）",
 }
 
@@ -181,21 +181,42 @@ def build_handoff(state: dict) -> dict:
 
 
 def build_handoff_summary(state: dict) -> str:
-    """組給真人客服看的短摘要（人看的，非 JSON）。沿用 issue_context 既有欄位。"""
+    """組給真人客服看的短摘要（人看的，非 JSON）。
+
+    目的（Adam 2026-07-16 重整）：讓真人接手前 10 秒抓到重點——這個人是誰、還有哪些問題
+    沒解決、為什麼轉過來。不寫沒資訊量的廢話：
+    - 「待處理問題」以意圖清單（intent_log）中「業務內、未確認解決」的項目為準——
+      舊版拿 issue.summary（＝最後一輪的字面），轉真人當下永遠變成「用戶要求轉真人」＝零資訊。
+    - 「問題類別」拿掉（常態是「其他」，資訊已含在問題清單裡）。
+    - 情緒只在「非中性」才列（中性＝沒事＝不用講）。
+    """
     ui = state["user_info"]
     ic = state["issue_context"]
     if ui.get("is_logged_in"):
         identity = f"會員（{ui.get('user_name') or '未提供姓名'}）"
     else:
         identity = "訪客"
+
+    # 待處理問題：意圖清單未結案項（依出現順序）；清單空→ 退 issue.summary → 再空給明示占位
+    pending = [
+        str(item.get("text") or "").strip()
+        for item in state.get("intent_state", {}).get("intent_log", [])
+        if item.get("in_scope", True)
+        and item.get("status") != "confirmed_resolved"
+        and str(item.get("text") or "").strip()
+    ]
+    issues = "；".join(pending) if pending else (ic.get("summary") or "（用戶尚未描述具體問題）")
+
     reason_code = state["ticket_state"].get("handoff_reason")
     reason_text = _HANDOFF_REASON_LABEL.get(reason_code, reason_code or "AI 無法完整處理")
+
     lines = [
         "【真人交接摘要】",
         f"• 身分：{identity}",
-        f"• 問題類別：{ic.get('category') or '未分類'}",
-        f"• 客戶想解決：{ic.get('summary') or '（尚無摘要）'}",
+        f"• 待處理問題：{issues}",
         f"• 轉真人原因：{reason_text}",
-        f"• 客戶情緒：{ic.get('user_emotion') or '中性'}",
     ]
+    emotion = ic.get("user_emotion")
+    if emotion and emotion != "中性":
+        lines.append(f"• 客戶情緒：{emotion}")
     return "\n".join(lines)

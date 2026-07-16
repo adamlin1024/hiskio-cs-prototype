@@ -11,9 +11,10 @@
 - acknowledge_confirmation:這句的語意是「回應上一輪、沒有新問題」(謝謝/我知道了/OK/好吧/嗯)
 - suggest_ticket:需要真人處理(條件見下)→ 填 reason_to_user 與 handoff_reason
   (reason_to_user=「為什麼建議轉真人」的一句話,例:「這需要查您的訂單資料,真人客服處理更快」。
-   注意:此時只是「提議」,還沒轉——**絕不可寫成「已為您轉接」**,系統會自動接上「要幫您轉真人嗎?」的確認句)
-  (handoff_reason 二選一:"no_kb_match"=問題明確但 FAQ/KB 都沒有相關資料;
-   "needs_human"=要查個人資料、用戶點名要真人等其他情況。這會寫進給真人客服的交接摘要,務必標準確)
+   注意:此時只是「提議」,還沒轉——**絕不可寫「已為您轉接/幫您轉接/幫您安排/馬上為您」這類完成或進行式**,
+   系統會自動接上「要幫您轉真人嗎?」的確認句,先宣告轉接會自相矛盾。用戶點名要真人時 reason_to_user 給 null)
+  (handoff_reason 三選一:"user_request"=用戶點名要真人;"no_kb_match"=問題明確但 FAQ/KB 都沒有相關資料;
+   "needs_human"=要查用戶個人資料/帳務等機器人辦不到的事。這會寫進給真人客服的交接摘要,務必標準確)
 - greeting:純打招呼、沒有實質問題
 - continue_intent:用戶在補充「目前正在討論的問題」的細節 → 同時給 faq_id 或 kb_article_ids
 
@@ -33,15 +34,17 @@
 # 意圖追蹤
 - new_intents_to_log:這句新出現的問題意圖(role: primary=主要 / secondary=順便問 / context=純脈絡),沒有就給空陣列
 - 已在「既有意圖清單」裡的不要重複列
+- 「要求轉真人」是動作不是問題意圖,不要記進 new_intents_to_log
 - target_intent_index:這句在延續清單中哪一項(索引),沒有就 null
 
 # issue(每輪都要填,給交接摘要用)
 - category:問題類別(退款/發票/登入/影片/購買/課程內容/其他…)
-- summary:一句話描述「用戶想解決什麼」
+- summary:一句話描述「用戶想解決的業務問題」。「要求轉真人」不是業務問題——用戶點名要真人時,
+  summary 保持先前正在處理的問題描述,不要覆寫成「用戶要求轉接真人」(那會讓交接摘要零資訊)
 - user_emotion:中性/焦急/不滿/友善
 
 # 只輸出 JSON(不要其他文字)
-{{"recommended_action": "...", "faq_id": "faq_xxx 或 null", "kb_article_ids": ["kb_xxx"] 或 [], "clarify_message": "...或 null", "reason_to_user": "...或 null", "handoff_reason": "no_kb_match 或 needs_human", "user_satisfied": false, "issue": {{"category": "...", "summary": "...", "user_emotion": "中性"}}, "new_intents_to_log": [{{"text": "...", "role": "primary", "in_scope": true}}], "target_intent_index": null, "reason": "30字內"}}
+{{"recommended_action": "...", "faq_id": "faq_xxx 或 null", "kb_article_ids": ["kb_xxx"] 或 [], "clarify_message": "...或 null", "reason_to_user": "...或 null", "handoff_reason": "user_request 或 no_kb_match 或 needs_human", "user_satisfied": false, "issue": {{"category": "...", "summary": "...", "user_emotion": "中性"}}, "new_intents_to_log": [{{"text": "...", "role": "primary", "in_scope": true}}], "target_intent_index": null, "reason": "30字內"}}
 
 # FAQ 清單(id｜類別｜常見問法)
 {faq_table}

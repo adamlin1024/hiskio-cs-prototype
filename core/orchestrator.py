@@ -66,6 +66,11 @@ DEFAULT_HANDOFF_MSG = "好的，我們會將您的訊息轉達給真人客服，
 # 已交接後、單機被繼續輸入時的固定 holding（正式環境 HiSupport 已切真人、不會再送進來）
 HANDED_OFF_HOLDING_MSG = "您的訊息我已經轉給真人客服，請稍候他們的回覆。"
 
+# 提議轉真人時,reason_to_user 不得是「宣告已轉接」的措辭(和確認句自相矛盾);中招就換中性理由
+_HANDOFF_ANNOUNCE_RE = re.compile(
+    r"(幫[您你]轉接|為[您你]轉接|已轉接|幫[您你]安排|為[您你]安排|已為[您你]|馬上為[您你]|接上真人|轉給真人)"
+)
+
 # Greeting fast-path：純招呼用 regex 攔截,不勞煩分診腦
 _GREETING_RE = re.compile(
     r"^\s*(你好|您好|哈囉|哈嘍|嗨|嘿|在嗎|在不在|hello|hi|hey|早安?|午安|晚安)"
@@ -411,7 +416,11 @@ def _execute_suggest_ticket(state, user_message, decision, session_id) -> dict:
     state["intent_state"]["consecutive_unclear_count"] = 0
     _switch_to_decision_intent(state, decision)
 
-    reason = decision.get("reason_to_user") or "這個問題交給真人客服會比較快"
+    # 提議句只能講「為什麼建議真人」,不得出現「已為您轉接/幫您安排」這類完成・進行式
+    # (會與下一行的確認句自相矛盾,2026-07-16 正式機實撞)。prompt 已禁止但腦偶爾不聽話,程式面兜底。
+    reason = (decision.get("reason_to_user") or "").strip()
+    if not reason or _HANDOFF_ANNOUNCE_RE.search(reason):
+        reason = "這個問題需要真人客服協助處理"
     ai_response = f"{reason}\n要幫您轉真人嗎？（回覆「好」或「不用」）"
     state["ticket_state"]["ticket_suggested"] = True
     # 精確原因(交接資料要完整):no_kb_match=真人會看到「知識庫沒有對應資料」=該補 KB 的訊號
