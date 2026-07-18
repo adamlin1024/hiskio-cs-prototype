@@ -4,7 +4,7 @@
 目前開放（最小可用版）：
 - 人設 prompt：覆寫 `prompts/*.txt`（白名單目前只開主答人設 `cs_response_system`）。
 - 對外訊息：覆寫特定固定訊息（白名單目前只開轉真人安撫話 `handoff_message`）。
-- 關鍵門檻：`max_off_topic_count` / `max_unclear`（正整數）。
+- 關鍵門檻：`max_off_topic_count` / `max_unclear`（正整數；注入 0＝清除回預設）。
 
 設定持久化到 `data/runtime_config.json`；HiSupport 透過 `POST /api/config` 推入。
 
@@ -27,6 +27,9 @@ _lock = threading.Lock()
 
 # 允許注入的白名單（防止亂塞、也讓「開放範圍」明確可控）
 _THRESHOLD_KEYS = {"max_off_topic_count", "max_unclear", "max_daily_messages"}
+# 這兩個門檻：注入 0＝「清除、回退呼叫端預設」（對抗健檢 2026-07-18 補：與 persona/handoff 同款清除語意，
+# 避免單向旋鈕坑）。max_daily_messages 的 0 另有「明確無上限」語意（照存、不清除），故不在此列。
+_THRESHOLD_CLEAR_ON_ZERO = {"max_off_topic_count", "max_unclear"}
 _PROMPT_KEYS = {"cs_response_system"}
 _MESSAGE_KEYS = {"handoff_message"}  # 轉真人安撫話（＝HiSupport 後台「期待管理訊息」推來的字）
 _MAX_PROMPT_CHARS = 8000  # 注入人設長度上限，防有人塞超長 prompt 灌爆每輪成本
@@ -45,11 +48,14 @@ def _sanitize(data: dict) -> dict:
     messages: dict = {}
     thresholds: dict = {}
     if isinstance(data, dict):
+        # 字串類（人設／安撫話）：空字串也保留＝「清除信號」（對抗健檢 2026-07-17，契約 §Amendments）。
+        # HiSupport 清空欄位後一律推空字串，set_overlay merge 據此把該 key 從 overlay 移除、回退內建預設；
+        # 若沿用舊的「空=丟棄」，清空後 merge 不動＝HiBot 永遠留著上次的自訂值（與 max_turns 同款單向旋鈕坑）。
         for k, v in (data.get("prompts") or {}).items():
-            if k in _PROMPT_KEYS and isinstance(v, str) and v.strip():
+            if k in _PROMPT_KEYS and isinstance(v, str):
                 prompts[k] = v[:_MAX_PROMPT_CHARS]
         for k, v in (data.get("messages") or {}).items():
-            if k in _MESSAGE_KEYS and isinstance(v, str) and v.strip():
+            if k in _MESSAGE_KEYS and isinstance(v, str):
                 messages[k] = v[:_MAX_MESSAGE_CHARS]
         for k, v in (data.get("thresholds") or {}).items():
             if k not in _THRESHOLD_KEYS:
@@ -58,8 +64,10 @@ def _sanitize(data: dict) -> dict:
                 iv = int(v)
             except (TypeError, ValueError, OverflowError):
                 continue
-            # max_daily_messages 接受 0=「明確設成無上限」(清掉先前注入);其他門檻 0 無意義,維持 >0
-            if iv > 0 or (iv == 0 and k == "max_daily_messages"):
+            # 一律接受 >=0（負數才無意義）：0 是「清除信號」，實際判讀交給 set_overlay merge——
+            # max_daily_messages 的 0＝明確無上限(照存)；max_off_topic/max_unclear 的 0＝清除回預設(merge 時 pop)。
+            # 對抗健檢 2026-07-18：舊版對後兩者丟棄 0＝沒有清除訊號＝單向旋鈕坑(同 persona/max_turns)。
+            if iv >= 0:
                 thresholds[k] = iv
     return {"prompts": prompts, "messages": messages, "thresholds": thresholds}
 
@@ -93,9 +101,20 @@ def set_overlay(data: dict, *, merge: bool = True) -> dict:
     with _lock:
         if merge:
             merged = get_overlay()
-            merged["prompts"].update(clean["prompts"])
-            merged["messages"].update(clean["messages"])
-            merged["thresholds"].update(clean["thresholds"])
+            # 字串類空字串＝清除該 key（回退內建預設）；其餘＝覆蓋。門檻類照常覆蓋（max_daily 的 0 由 get_threshold 判讀為無上限）。
+            for section in ("prompts", "messages"):
+                for k, v in clean[section].items():
+                    if v == "":
+                        merged[section].pop(k, None)
+                    else:
+                        merged[section][k] = v
+            # 門檻：max_off_topic_count/max_unclear 的 0＝清除該 key（回退呼叫端預設）；
+            # max_daily_messages 的 0＝明確無上限，照存。對抗健檢 2026-07-18：三個門檻都能清，不再有單向旋鈕。
+            for k, v in clean["thresholds"].items():
+                if k in _THRESHOLD_CLEAR_ON_ZERO and v == 0:
+                    merged["thresholds"].pop(k, None)
+                else:
+                    merged["thresholds"][k] = v
             _overlay = merged
         else:
             _overlay = clean

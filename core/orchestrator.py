@@ -62,8 +62,10 @@ DAILY_LIMIT_MSG = (
 )
 
 # 轉真人安撫話「內建預設」：HiSupport 沒推 handoff_message 時用這句（純單機／未接時）。
-# 依約定，這句要跟 HiSupport 後台「期待管理訊息」的預設一致，確保單機＝正式體驗。
-DEFAULT_HANDOFF_MSG = "好的，我們會將您的訊息轉達給真人客服，並於正常上班日回覆您。"
+# 依約定（契約 §4），這句要跟 HiSupport 端 BotResponder::DEFAULT_HANDOFF_MESSAGE 一字不差，確保單機＝正式體驗。
+# 對抗健檢 2026-07-18：實抓兩邊預設不同字——HiBot 用機器人驅動的轉真人、HiSupport 用 HiBot 失效時的轉真人，
+# 同一訪客可能看到兩種措辭；統一到 HiSupport 後台順稿過的那句（HiSupport 為單一真理）。
+DEFAULT_HANDOFF_MSG = "已為您轉接專屬客服，客服通常會在一個工作日內回覆您。如果還有想補充的資訊，歡迎在這裡繼續留言。"
 # 已交接後、單機被繼續輸入時的固定 holding（正式環境 HiSupport 已切真人、不會再送進來）
 HANDED_OFF_HOLDING_MSG = "您的訊息我已經轉給真人客服，請稍候他們的回覆。"
 
@@ -94,15 +96,28 @@ def handle_user_message(session_id: str, user_message: str, image_urls: list[str
     if state is None:
         raise ValueError(f"找不到 session: {session_id}")
 
-    # 圖片三件套(契約 2026-07-17b):已交接真人就不花讀圖錢(閉環固定回覆用不到);
-    # 其餘情況先把圖翻成文字描述併進問題,讓 chat_history 與分診腦看到同一份完整內容。
-    if image_urls and not state["ticket_state"].get("handed_off"):
+    # 等待轉真人確認 phase：對「原始用戶文字」算一次 yes/no 決定，往下傳給 _try_handle_phase 共用。
+    # 對抗健檢 2026-07-18：舊版同輪呼叫 decide 兩次(這裡+_try_handle_phase),且第二次會吃到被圖描述改寫過的
+    # 文字→可能不一致。改成算一次、用原始文字(用戶的「好/不用」是文字本身,不該被圖描述汙染)。
+    ticket_confirm = ticket_handler.decide(user_message) if state.get("phase") == "等待轉真人確認" else None
+
+    # 圖片三件套(契約 2026-07-17b):把附圖翻成文字描述併進問題,讓 chat_history 與分診腦看到同一份完整內容。
+    # 不讀圖的情況(對抗健檢 2026-07-17 補):
+    #   ①已交接真人=閉環固定回覆用不到(不花讀圖錢);
+    #   ②phase=等待轉真人確認且這句是明確「好/不用」=只判斷 yes/no,圖描述會汙染判斷、害「好」漏接轉真人
+    #     (圖已由 HiSupport 入庫給真人;U 情況會 fall through 當新問題,那時仍讀圖)。
+    read_images = bool(image_urls) and not state["ticket_state"].get("handed_off")
+    if read_images and ticket_confirm in ("Y", "N"):
+        read_images = False
+    if read_images:
         desc = vision.describe_images(image_urls)
         base = user_message.strip() or "（用戶傳來圖片）"
         if desc:
             user_message = f"{base}\n\n[附圖內容（讀圖員擷取）]\n{desc}"
         else:
-            user_message = f"{base}\n[用戶附了圖片，但系統無法讀取；圖片已提供給真人客服]"
+            # 讀圖失敗(模型故障/抓圖逾時):不硬承諾真人會看(那條路 HiSupport 端不一定發通知),
+            # 引導用戶用文字補充;圖仍在收件台,客服開對話看得到。
+            user_message = f"{base}\n[系統暫時無法讀取這張圖片，您可以用文字補充說明，我再協助您。]"
 
     append_message(state, "user", user_message)
 
@@ -114,8 +129,8 @@ def handle_user_message(session_id: str, user_message: str, image_urls: list[str
     if state.get("phase") not in _KNOWN_PHASES:
         state["phase"] = "對話中"
 
-    # 1. 特殊 phase 攔截（等待轉真人確認）
-    phase_result = _try_handle_phase(state, user_message, session_id)
+    # 1. 特殊 phase 攔截（等待轉真人確認）——用頂端已算好的 ticket_confirm，不再重算一次
+    phase_result = _try_handle_phase(state, user_message, session_id, ticket_confirm)
     if phase_result is not None:
         return phase_result
 
@@ -151,10 +166,16 @@ def handle_user_message(session_id: str, user_message: str, image_urls: list[str
     return _execute_action(state, user_message, decision, session_id)
 
 
-def _try_handle_phase(state: dict, user_message: str, session_id: str) -> dict | None:
-    """特殊 phase 處理；回傳 None 代表 fall through。"""
+def _try_handle_phase(
+    state: dict, user_message: str, session_id: str, ticket_confirm: str | None = None
+) -> dict | None:
+    """特殊 phase 處理；回傳 None 代表 fall through。
+
+    ticket_confirm：呼叫端已對原始用戶文字算好的 yes/no 決定（Y/N/U）。傳入就直接用，
+    避免同輪重複呼叫 decide（對抗健檢 2026-07-18）；沒傳（其他呼叫路徑）才自己算。
+    """
     if state["phase"] == "等待轉真人確認":
-        decision = ticket_handler.decide(user_message)
+        decision = ticket_confirm if ticket_confirm is not None else ticket_handler.decide(user_message)
         logger.info("session=%s 轉真人確認 decision=%s", session_id, decision)
         if decision == "Y":
             return _execute_handoff(state, user_message, session_id)

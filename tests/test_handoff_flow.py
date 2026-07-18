@@ -107,6 +107,34 @@ def test_decide_clear_yes_no_uses_rules_not_llm(db, monkeypatch):
         assert ticket_handler.decide(no) == "N", no
 
 
+def test_confirm_phase_with_image_skips_vision_and_decides_once(db, monkeypatch):
+    """對抗健檢 2026-07-18：等待轉真人確認 + 附圖 + 回「好」→
+    圖不讀（不讓圖描述汙染 yes/no 判斷、害「好」漏接）、且 decide 同輪只算一次（dedup）。"""
+    from nodes import ticket_handler, vision
+
+    calls = {"decide": 0, "vision": 0}
+
+    def _decide(msg):
+        calls["decide"] += 1
+        return "Y"
+
+    def _vision(urls):
+        calls["vision"] += 1
+        return "（圖描述）"
+
+    monkeypatch.setattr(ticket_handler, "decide", _decide)
+    monkeypatch.setattr(vision, "describe_images", _vision)
+
+    s = _offered_state()
+    res = orchestrator.handle_user_message(
+        s["session_id"], "好", image_urls=["http://8.8.8.8/x.png"]
+    )
+    assert res["response_type"] == "handoff"
+    assert res["handoff"]["requested"] is True
+    assert calls["vision"] == 0   # 確認 yes/no 時不讀圖
+    assert calls["decide"] == 1   # 同輪只判一次（不再重複呼叫）
+
+
 def test_reason_is_none_when_not_handed_off(db):
     """未交接（requested=False）時，訊號不該夾帶殘留 reason／summary（衛生）。"""
     s = _offered_state()  # 提議中、尚未同意 → requested 應為 False
